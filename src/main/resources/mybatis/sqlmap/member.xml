@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.i4unetworks.weys.member.MemberDao">
+
+	<!-- 거래 목록 리스트 -->
+	<select id="selectPayList" resultType="memberVO">
+		/* selectPayList */
+		SELECT
+			PAY_ID
+			, PAY_AMNT
+			, PAY_LIMIT
+			, PERIOD
+			, COLOR
+			, PAY_INFO
+			, PAY_TEXT
+			, PAY_TEXT_ENG
+			, CASE WHEN PAY_ST ='D' THEN '사용중' ELSE '대기중' END PAY_ST
+		FROM PAY_INFO
+		LIMIT #{pageSize} OFFSET #{searchPage}
+	</select>
+
+	<!-- 거래글 전체 수  -->
+	<select id="selectPayListCnt" resultType="int">
+		/* getTradeListCnt */
+		SELECT
+			COUNT(PAY_ID)
+		FROM PAY_INFO
+	</select>
+
+	<!-- 거래 멤버십 상세 -->
+	<select id="selectPayInfo" resultType="memberVO">
+		/* selectPayInfo */
+		SELECT
+			PAY_ID
+			, PAY_TYPE
+			, PAY_AMNT
+			, PAY_LIMIT
+			, PERIOD
+			, COLOR
+			, PAY_INFO
+			, PAY_TEXT
+			, PAY_TEXT_ENG
+			, PAY_ST
+		FROM PAY_INFO
+		WHERE PAY_ID = #{value}
+	</select>
+
+	<!-- 멤버십 이벤트 등록 -->
+	<insert id="insertPayInfo">
+		/* insertPayInfo */
+		INSERT INTO PAY_INFO(
+			PAY_TYPE
+			, PAY_AMNT
+			, PAY_LIMIT
+			, PAY_ST
+			, PAY_TEXT
+			, PAY_TEXT_ENG
+			, PERIOD
+			, COLOR
+			, PAY_INFO
+			, REG_DTTM
+		) VALUES (
+			#{payType}
+			, #{payAmnt}
+			, #{payLimit}
+			, 'D'
+			, #{payText}
+			, #{payTextEng}
+			, #{period}
+			, #{color}
+			, #{payInfo}
+			, NOW()
+		)
+	</insert>
+	
+	<!-- 멤버십 이벤트 수정 -->
+	<update id="updatePayInfo">
+		/* updatePayInfo */
+		UPDATE PAY_INFO
+			SET PAY_TYPE = #{payType}
+			, PAY_AMNT = #{payAmnt}
+			, PAY_LIMIT = #{payLimit}
+			, PAY_TEXT = #{payText}
+			, PAY_TEXT_ENG = #{payTextEng}
+			, PERIOD = #{period}
+			, COLOR = #{color}
+			, PAY_INFO = #{payInfo}
+		WHERE PAY_ID = #{payId}
+	</update>
+	
+	<!-- 멤버십 이벤트 삭제 -->
+	<delete id="deletePayInfo">
+		/* deletePayInfo */
+		DELETE FROM PAY_INFO
+		WHERE PAY_ID = #{value}
+	</delete>
+
+	<!-- RSV_NO 중복체크 -->
+	<select id="selectCheckRsvNo" resultType="int">
+	/* selectCheckRsvNo */
+		SELECT
+			COUNT(RSV_NO)
+		FROM RSV
+		WHERE RSV_NO = #{value}
+	</select>
+	
+	<insert id="insertRsv">
+		INSERT INTO RSV(
+			RSV_NO
+			, RSV_TP
+			, STORE_ID
+			, RSV_NM
+			, RSV_NM_ID
+			, RSV_TEL
+			, RSV_EMAIL
+			, RSV_DT
+			, RSV_TM
+			, UNIT
+			, BASIC_RATE_WEYS
+			, BASIC_RATE_DTTM
+			, RSV_AMNT
+			, GET_AMNT
+			, CMS
+			, RSV_ST
+			, RSV_FORM
+			, REG_DTTM
+			, RSV_PAPER
+			, ADMIN_ST
+			, RSV_QR
+		) 
+		VALUES(
+			#{rsvNo}
+			, 'W'
+			, #{storeId}
+			, AES_ENCRYPT(#{usrNm}, SHA2(#{key},512))
+			, AES_ENCRYPT(#{usrNmId}, SHA2(#{key},512))
+			, AES_ENCRYPT(#{usrTel}, SHA2(#{key},512))
+			, AES_ENCRYPT(#{usrEmail}, SHA2(#{key},512))
+			, #{rsvDt}
+			, #{rsvTm}
+			, #{unitCd}
+			, #{basicRate}
+			, #{rateDttm}
+			, #{rsvAmnt}
+			, #{getAmnt}
+			, #{cms}
+			, #{rsvSt}
+			, #{rsvForm}
+			, NOW()
+			, #{rsvPaper}
+			, 'Y'
+			, #{rsvQr}
+			)
+	</insert>
+</mapper>

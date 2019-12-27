@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.i4unetworks.weys.push.PushDao">
+
+	<!-- 이벤트 목록 리스트 -->
+	<select id="selectEventList" resultType="map">
+		/* selectEventList */
+		SELECT
+			EVENT_ID
+			, EVENT_TITLE
+		FROM EVENT
+		WHERE EVENT_ST = 'Y'
+			AND START_DT &lt; NOW()
+			AND END_DT &gt;= DATE_FORMAT(NOW(), '%Y.%m.%d')
+		ORDER BY EVENT_ID DESC
+	</select>
+
+	<!-- 공지사항 목록 리스트 -->
+	<select id="selectNoticeList" resultType="map">
+		/* selectNoticeList */
+		SELECT
+			NOTICE_ID
+			, NOTICE_TITLE
+		FROM NOTICE
+		WHERE NOTICE_ST = 'Y'
+		ORDER BY NOTICE_ID DESC
+	</select>
+
+	<!-- 컨텐츠 목록 리스트 -->
+	<select id="selectContList" resultType="map">
+		/* selectContList */
+		SELECT
+			CL_URL
+			, CL_TITLE
+		FROM CONT_LIST
+		WHERE START_DT &lt; NOW()
+			AND END_DT &gt; NOW()
+			AND CL_LOGIN_CHK = 'N'
+	</select>
+	
+	
+	<!-- test -->
+	<select id="selectTestPush" resultType="map">
+		/* selectTestPush */
+		SELECT
+			UT.OS
+			, UT.UUID
+			, U.USR_AK
+		FROM (SELECT
+			USR_ID
+			FROM RSV
+			WHERE RSV_ST IN ('R', 'F')
+				AND RSV_DT &gt;= '2019.04.01'
+				AND USR_ID IS NOT NULL
+				AND USR_ID NOT IN (
+				SELECT
+			USR_ID
+			FROM EVENT_JOIN
+			WHERE CHK_ST = 'Y'
+			)
+		GROUP BY USR_ID) R, USER U, USER_TOKEN UT
+		WHERE R.USR_ID = U.USR_ID
+			AND U.USR_ST = 'Y'
+			AND U.USR_ID = UT.USR_ID
+			AND UT.PUSH_ST = 'Y'
+			AND UT.UUID != ''
+	</select>
+	
+	<select id="selectTestPushAll" resultType="string">
+		/* selectTestPushAll */
+		SELECT
+			UT.UUID
+		FROM USER U, USER_TOKEN UT
+		WHERE U.USR_ST = 'Y'
+			AND U.USR_ID = UT.USR_ID
+			AND UT.UUID != ''
+			AND UT.OS = #{value}
+	</select>
+	
+</mapper>

@@ -1,0 +1,31 @@
+@CHARSET "UTF-8";
+body{font-size:14px;}
+table {width:100%;text-align: center;border-collapse: collapse;}
+
+.title_body{width:100%;}
+.title_body  tr{height:35px; width:100%;}
+.smry_txt {height:50px;}
+.sign_space{height:90px;}
+
+.title {height:50px;font-size: 20px;font-weight: 700;}
+img{height:110px;width:110px;}
+.barcode{width:20%;}
+.title_text{width:50%;}
+.sign{border:1px solid #000;font-size: 15px;width:15%;}
+.sumry{text-align: left;height:50px;}
+.unit_txt{font-size:11px;}
+.left_txt{text-align: left;}
+
+.empty_space{height:5px;}
+
+.data_title{height:35px;background-color:#e2e2e2;border:1px solid #444444;font-size:14px;}
+.data_list{height:25px;font-size: 11px;border:1px solid #444444;}
+
+
+.data_body th{border:1px solid #444444;}
+.data_body td{border:1px solid #444444;}
+
+.data_body {width:100%; margin-top:10px;}
+.data_title .num{width:8%;}
+.data_title .nm{width:16%;}
+.data_title .def{width:11%;}

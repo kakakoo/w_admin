@@ -1,0 +1,1685 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.i4unetworks.weys.rsv.RsvDao">
+
+	<!-- 예약 리스트 -->
+	<select id="getRsvList" resultType="rsvListVO">
+		/* getRsvList */
+		SELECT
+			R.RSV_ID
+			, IFNULL(U.USR_ID, 0) USR_ID
+			, S.STORE_ID
+			, CASE WHEN R.RSV_FORM = 'R' THEN S.STORE_NM_ENG ELSE 
+				CONCAT(CAST(AES_DECRYPT(R.RSV_ADDR, SHA2(#{encKey},512)) AS CHAR), ' ', CAST(AES_DECRYPT(R.RSV_ADDR_DETAIL, SHA2(#{encKey},512)) AS CHAR)) END STORE_NM
+			, DATE_FORMAT(R.REG_DTTM, '%Y.%m.%d %H:%i') REG_DTTM
+			, CONCAT(R.RSV_DT, ' ', R.RSV_TM) RSV_DT
+			, R.UNIT
+			, R.RSV_AMNT
+			, R.GET_AMNT
+			, ROUND(R.BASIC_RATE_WEYS, 2) BASIC_RATE_WEYS
+			, R.WEYS_BONUS
+			, R.CMS
+			, CASE WHEN R.UNIT = 'JPY' THEN CAST(R.BASIC_RATE_WEYS * R.RSV_AMNT / 100 AS INT)
+				ELSE CAST(R.BASIC_RATE_WEYS * R.RSV_AMNT AS INT) END commis
+			, CASE WHEN U.FORIGN = 'Y' THEN CONCAT(CAST(AES_DECRYPT(U.GIV_NM, SHA2(#{encKey},512)) AS CHAR), ' ', CAST(AES_DECRYPT(U.SUR_NM, SHA2(#{encKey},512)) AS CHAR))
+				ELSE CAST(AES_DECRYPT(IFNULL(U.USR_NM, R.RSV_NM), SHA2(#{encKey},512)) AS CHAR) END RSV_NM
+			, CAST(AES_DECRYPT(IFNULL(U.USR_TEL, R.RSV_TEL), SHA2(#{encKey},512)) AS CHAR) USR_TEL
+			, CAST(AES_DECRYPT(R.VBANK_NM, SHA2(#{encKey},512)) AS CHAR) VBANK_NM
+			, CASE WHEN R.RSV_ST = 'S' AND R.REG_DTTM &lt; subdate(NOW(), INTERVAL 30 MINUTE) THEN 'P' ELSE R.RSV_ST END RSV_ST
+			, R.MERCHANT_UID
+			, R.IMP_UID
+			, IFNULL(R.RSV_PAPER, 'R') RSV_PAPER
+			, R.RSV_TP
+			, R.ADMIN_ST
+			, CASE WHEN R.RSV_TP = 'W' AND (R.COP_ID != 0 AND R.COP_ID IS NOT NULL) THEN C.COP_NM WHEN R.RSV_TP = 'W' THEN 'WEB' WHEN UT.OS = 'I' THEN 'IOS' ELSE 'AOS' END PLATFORM
+			, IFNULL(M.MEMO_CNT, 0) MEMO_CNT
+		FROM RSV R
+		INNER JOIN STORE S ON R.STORE_ID = S.STORE_ID
+		LEFT OUTER JOIN USER U ON R.USR_ID = U.USR_ID
+		LEFT OUTER JOIN USER_TOKEN UT ON U.USR_ID = UT.USR_ID
+		LEFT OUTER JOIN COP C ON R.COP_ID = C.COP_ID
+		LEFT OUTER JOIN ADMIN A ON R.ADMIN_KEY = A.ADMIN_KEY
+		LEFT OUTER JOIN (
+			SELECT
+				RSV_ID
+				, COUNT(RSV_ID) MEMO_CNT
+			FROM RSV_MEMO
+			GROUP BY RSV_ID
+		) M ON R.RSV_ID = M.RSV_ID
+		WHERE R.RSV_DT BETWEEN #{startDt} AND #{endDt}
+		<if test='rsvStVal != null'>
+			AND R.RSV_ST IN 
+			<foreach collection="listData" item="item" separator="," open="(" close=")">
+				#{item}
+			</foreach>
+		</if>
+		<if test='rsvFormVal != null'>
+			AND R.RSV_FORM IN 
+			<foreach collection="listData1" item="item" separator="," open="(" close=")">
+				#{item}
+			</foreach>
+		</if>
+		<if test='storeId != null and storeId != "t"'>
+			AND R.STORE_ID = #{storeId}
+		</if>
+		<if test='searchType != null and searchType != "t"'>
+			AND R.UNIT = #{searchType}
+		</if>
+		<if test='searchText != null and searchText != ""'>
+			AND (U.USR_NM = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512)) OR R.RSV_NM = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512))) 
+		</if>
+		ORDER BY ${orderTp} ${descTp}
+		LIMIT #{pageSize} OFFSET #{searchPage}
+	</select>
+	
+	<!-- 예약 전체 수  -->
+	<select id="getRsvListCnt" resultType="int">
+		/* getRsvListCnt */
+		SELECT
+			COUNT(R.RSV_ID)
+		FROM RSV R
+		INNER JOIN STORE S ON R.STORE_ID = S.STORE_ID
+		LEFT OUTER JOIN USER U ON R.USR_ID = U.USR_ID
+		LEFT OUTER JOIN ADMIN A ON R.ADMIN_KEY = A.ADMIN_KEY
+		WHERE R.RSV_DT BETWEEN #{startDt} AND #{endDt}
+		<if test='rsvStVal != null'>
+			AND R.RSV_ST IN 
+			<foreach collection="listData" item="item" separator="," open="(" close=")">
+				#{item}
+			</foreach>
+		</if>
+		<if test='rsvFormVal != null'>
+			AND R.RSV_FORM IN 
+			<foreach collection="listData1" item="item" separator="," open="(" close=")">
+				#{item}
+			</foreach>
+		</if>
+		<if test='storeId != null and storeId != "t"'>
+			AND R.STORE_ID = #{storeId}
+		</if>
+		<if test='searchType != null and searchType != "t"'>
+			AND R.UNIT = #{searchType}
+		</if>
+		<if test='searchText != null and searchText != ""'>
+			AND (U.USR_NM = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512)) OR R.RSV_NM = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512))) 
+		</if>
+	</select>
+
+	<!-- 예약 취소 리스트 -->
+	<select id="getRsvCancelList" resultType="rsvListVO">
+		/* getRsvCancelList */
+		SELECT
+			R.RSV_ID
+			, DATE_FORMAT(R.CANCEL_DTTM, '%Y.%m.%d %H:%i:%s') CANCEL_DTTM
+			, R.UNIT
+			, R.CANCEL_RATE
+			, R.RSV_AMNT
+			, R.GET_AMNT
+			, CASE WHEN U.FORIGN = 'Y' THEN CONCAT(CAST(AES_DECRYPT(U.GIV_NM, SHA2(#{encKey},512)) AS CHAR), ' ', CAST(AES_DECRYPT(U.SUR_NM, SHA2(#{encKey},512)) AS CHAR))
+				ELSE CAST(AES_DECRYPT(IFNULL(U.USR_NM, R.RSV_NM), SHA2(#{encKey},512)) AS CHAR) END RSV_NM
+			, R.RSV_ST
+			, R.CANCEL_AMNT
+			, R.CANCEL_CMS
+			, CAST(AES_DECRYPT(R.RET_BANK_NM, SHA2(#{encKey},512)) AS CHAR) RET_BANK_NM
+			, CAST(AES_DECRYPT(R.RET_BANK_CD, SHA2(#{encKey},512)) AS CHAR) RET_BANK_CD
+		FROM RSV R
+		LEFT OUTER JOIN USER U ON R.USR_ID = U.USR_ID
+		WHERE R.CANCEL_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+			AND R.RSV_ST IN 
+			<foreach collection="listData" item="item" separator="," open="(" close=")">
+				#{item}
+			</foreach>
+			<if test='searchText != null and searchText != ""'>
+				AND (U.USR_NM = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512)) OR R.RSV_NM = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512)))
+			</if>
+		ORDER BY R.CANCEL_DTTM
+		LIMIT #{pageSize} OFFSET #{searchPage}
+	</select>
+
+	<!-- 예약 취소 리스트 -->
+	<select id="getRsvListCancelCnt" resultType="int">
+		/* getRsvListCancelCnt */
+		SELECT
+			COUNT(R.RSV_ID)
+		FROM RSV R
+		LEFT OUTER JOIN USER U ON R.USR_ID = U.USR_ID
+		WHERE R.CANCEL_DTTM BETWEEN #{startDt} AND #{endDt}
+			AND R.RSV_ST IN 
+			<foreach collection="listData" item="item" separator="," open="(" close=")">
+				#{item}
+			</foreach>
+			<if test='searchText != null and searchText != ""'>
+				AND (U.USR_NM = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512)) OR R.RSV_NM = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512)))
+			</if>
+	</select>
+
+	<!-- 예약 환불 완료 -->
+	<update id="updateRsvCancel">
+		/* updateRsvCancel */
+		UPDATE RSV
+			SET RSV_ST = #{toBe}
+				, MOD_DTTM = NOW()
+		WHERE RSV_ID = #{rsvId}
+			AND RSV_ST = 'CR'
+	</update>
+	
+	<!-- 예약 환불 완료 로그 작성 -->
+	<insert id="insertRsvLog">
+		/* insertRsvLog */
+		INSERT INTO RSV_LOG(
+			RSV_ID
+			, ADMIN_KEY
+			, AS_IS
+			, TO_BE
+			, REG_DTTM
+		) VALUES (
+			#{rsvId}
+			, #{adminKey}
+			, #{asIs}
+			, #{toBe}
+			, NOW()
+		)
+	</insert>
+	
+	<!-- 예약 취소 관련 정보 제공 -->
+	<select id="selectCancelUsrInfo" resultType="map">
+		/* selectCancelUsrInfo */
+		SELECT
+			R.RSV_ID
+			, IFNULL(R.USR_ID, 0) USR_ID
+			, R.RSV_NO
+			, CONCAT(R.RSV_DT, ' ', R.RSV_TM) RSV_DT
+			, DATE_FORMAT(R.CANCEL_DTTM, '%Y.%m.%d %H:%i') CANCEL_DTTM
+			, R.RSV_TP
+			, U.UNIT_NM
+			, R.UNIT
+			, R.RSV_AMNT
+			, R.GET_AMNT
+			, CASE WHEN USR.FORIGN = 'Y' THEN CONCAT(CAST(AES_DECRYPT(USR.GIV_NM, SHA2(#{encKey},512)) AS CHAR), ' ', CAST(AES_DECRYPT(USR.SUR_NM, SHA2(#{encKey},512)) AS CHAR))
+				ELSE CAST(AES_DECRYPT(IFNULL(USR.USR_NM, R.RSV_NM), SHA2(#{encKey},512)) AS CHAR) END RSV_NM
+			, CAST(AES_DECRYPT(IFNULL(USR.USR_TEL, R.RSV_TEL), SHA2(#{encKey},512)) AS CHAR) RSV_TEL
+			, R.CANCEL_AMNT
+			, R.CANCEL_RATE
+			, R.CANCEL_CMS
+			, CAST(AES_DECRYPT(R.RET_BANK_NM, SHA2(#{encKey},512)) AS CHAR) RET_BANK_NM
+			, CAST(AES_DECRYPT(R.RET_BANK_CD, SHA2(#{encKey},512)) AS CHAR) RET_BANK_CD
+			, CAST(AES_DECRYPT(IFNULL(USR.USR_EMAIL, R.RSV_EMAIL), SHA2(#{encKey},512)) AS CHAR) RET_CONTACT
+			, IFNULL(USR.NATION, '82') NATION
+			, UT.UUID
+			, UT.OS
+			, UT.PUSH_ST
+		FROM RSV R
+		INNER JOIN UNIT U ON R.UNIT = U.UNIT_CD
+		LEFT OUTER JOIN USER USR ON R.USR_ID = USR.USR_ID
+		LEFT OUTER JOIN USER_TOKEN UT ON R.USR_ID = UT.USR_ID
+		WHERE R.RSV_ID = #{rsvId}
+	</select>
+	
+	<!-- 예약지점 리스트 가져오기 -->
+	<select id="selectStoreList" resultType="map">
+		/* selectStoreList */
+		SELECT
+			STORE_ID
+			, STORE_NM
+		FROM STORE
+		WHERE STORE_ST = 'Y'
+			AND STORE_RSV = 'Y'
+	</select>
+
+	<!-- 예약지점 화폐 정보 -->
+	<select id="getRsvUnitList" resultType="rsvUnitVO">
+		/* getRsvUnitList */
+		SELECT
+			R.RU_ID
+			, R.STORE_ID
+			, C.STORE_CNT
+			, S.STORE_NM
+			, R.UNIT_ID
+			, U.UNIT_CD
+			, R.UNIT_ST
+			, U.UNIT_SIZE
+			, U.UNIT_MIN
+		FROM RSV_UNIT R
+		INNER JOIN UNIT U ON R.UNIT_ID = U.UNIT_ID
+		INNER JOIN STORE S ON R.STORE_ID = S.STORE_ID
+		INNER JOIN (
+			SELECT
+				STORE_ID
+				, COUNT(STORE_ID) STORE_CNT
+			FROM RSV_UNIT
+			GROUP BY STORE_ID
+			) C ON R.STORE_ID = C.STORE_ID
+		ORDER BY STORE_ID
+	</select>
+	
+	<!-- 예약지점 화폐 정보 업데이트 -->
+	<update id="updateRsvUnit">
+		/* updateRsvUnit */
+		UPDATE RSV_UNIT
+			SET UNIT_ST = #{unitSt}
+		WHERE RU_ID = #{ruId}
+	</update>
+
+	<!-- 예약정보 엑셀 출력 -->
+	<select id="selectRsvExcel" resultType="rsvExcelVO">
+		/* selectRsvExcel */
+		SELECT
+			R.RSV_QR
+			, R.RSV_NO
+			, DATE_FORMAT(R.REG_DTTM, '%Y-%m-%d %H:%i') REG_DTTM
+			, R.UNIT
+			, R.RSV_AMNT
+			, R.BASIC_RATE_WEYS BASIC_RATE
+			, (R.GET_AMNT - R.WEYS_COMMIS_VAL + R.WEYS_BONUS_VAL - R.CMS) WON_BILL
+			, (R.WEYS_COMMIS_VAL - R.WEYS_BONUS_VAL) WEYS_COMMIS
+			, R.RSV_PAPER
+			, R.CMS
+			, R.GET_AMNT
+			, CASE WHEN U.FORIGN = 'Y' THEN CONCAT(CAST(AES_DECRYPT(U.GIV_NM, SHA2(#{encKey},512)) AS CHAR), ' ', CAST(AES_DECRYPT(U.SUR_NM, SHA2(#{encKey},512)) AS CHAR))
+				ELSE CAST(AES_DECRYPT(IFNULL(U.USR_NM, R.RSV_NM), SHA2(#{encKey},512)) AS CHAR) END RSV_NM
+			, CAST(AES_DECRYPT(IFNULL(U.USR_TEL, R.RSV_TEL), SHA2(#{encKey},512)) AS CHAR) RSV_TEL
+			, CASE WHEN RSV_FORM = 'R' THEN S.DISPLAY_NM ELSE 
+				CONCAT(CAST(AES_DECRYPT(R.RSV_ADDR, SHA2(#{encKey},512)) AS CHAR), ' ', CAST(AES_DECRYPT(R.RSV_ADDR_DETAIL, SHA2(#{encKey},512)) AS CHAR)) END STORE_NM
+			, CASE WHEN RSV_FORM = 'R' THEN S.STORE_NM_ENG ELSE IFNULL(R.ZIP_CODE, '') END STORE_NM_ENG
+			, R.RSV_DT
+			, R.RSV_TM
+			, S.DELIVER_TIME
+			, R.RSV_FORM
+			, IFNULL(M.MEMO_CNT, 0) MEMO_CNT
+		FROM RSV R
+		INNER JOIN STORE S ON R.STORE_ID = S.STORE_ID
+		LEFT OUTER JOIN USER U ON R.USR_ID = U.USR_ID
+		LEFT OUTER JOIN (
+			SELECT
+				RSV_ID
+				, COUNT(RSV_ID) MEMO_CNT
+			FROM RSV_MEMO
+			GROUP BY RSV_ID
+		) M ON R.RSV_ID = M.RSV_ID
+		WHERE ((R.RSV_DT = #{startDt} AND R.RSV_TM &gt; #{rsvTm}) OR (R.RSV_DT = #{endDt} AND R.RSV_TM &lt; #{rsvTm}))
+			AND R.RSV_ST = 'R'
+			<if test='tp == "Y"'>
+				AND R.ADMIN_ST != 'Y'
+			</if>
+		ORDER BY R.RSV_DT, R.RSV_TM
+	</select>
+
+	<!-- 지점 담당자 정보 -->
+	<select id="selectStoreMng" resultType="map">
+		/* selectStoreMng */
+		SELECT
+			S.STORE_NM
+			, A.ADMIN_NAME
+			, A.ADMIN_KEY
+		FROM STORE S, ADMIN A
+		WHERE S.STORE_ID = #{value}
+			AND S.STORE_ID = A.STORE_ID
+	</select>
+	
+	<!-- 예약 qr 코드체크 -->
+	<select id="selectRsvQrCnt" resultType="int">
+	/* selectRsvQrCnt */
+		SELECT
+			COUNT(RSV_ID)
+		FROM RSV
+		WHERE RSV_QR = #{value}
+	</select>
+	
+	<!-- 예약 담당자 배정 -->
+	<update id="updateRsvMng">
+		/* updateRsvMng */
+		UPDATE RSV
+			SET ADMIN_KEY = #{adminKey}
+				, RSV_QR = #{qr}
+				, RSV_QR_IMG = #{qrCodeUrl}
+		WHERE RSV_ID = #{rsvId}
+			AND RSV_ST IN ('I', 'R')
+	</update>
+	
+	<!-- 예약 상태 변경 -->
+	<update id="updateRsvSt">
+		/* updateRsvSt */
+		UPDATE RSV R
+			SET RSV_ST = 'R'
+				, MOD_DTTM = NOW()
+		WHERE RSV_ID = #{rsvId}
+			AND RSV_ST = 'I'
+	</update>
+
+	<!-- 로그 업데이트 -->
+	<insert id="insertRsvLogMap">
+	/* insertRsvLogMap */
+		INSERT INTO RSV_LOG(
+			RSV_ID
+			, ADMIN_KEY
+			, AS_IS
+			, TO_BE
+			, REG_DTTM
+		) VALUES (
+			#{rsvId}
+			, #{adminKey}
+			, #{asIs}
+			, #{toBe}
+			, NOW()
+		)
+	</insert>
+	
+	<!-- 활동 로그 입력 -->
+	<insert id="insertAdmActLog">
+	/* insertAdmActLog */
+		INSERT INTO ADMIN_LOG(
+			ADMIN_KEY
+			, ACT
+			, REG_DTTM
+		) VALUES (
+			#{adminKey}
+			, #{act}
+			, NOW()
+		)
+	</insert>
+	
+	<!-- 예약자 토큰 정보 -->
+	<select id="selectPushInfo" resultType="map">
+	/* selectPushInfo */
+		SELECT
+			T.UUID
+			, T.OS
+			, S.STORE_NM
+		FROM RSV R, USER_TOKEN T, STORE S
+		WHERE R.RSV_ID = #{rsvId}
+			AND R.USR_ID = T.USR_ID
+			AND R.STORE_ID = S.STORE_ID
+			AND T.UUID != ''
+			AND T.PUSH_ST = 'Y'
+			AND T.UUID IS NOT NULL
+	</select>
+	
+	<!-- 사용자 연락처 국가코드 -->
+	<select id="selectUsrNation" resultType="string">
+	/* selectUsrNation */
+		SELECT
+			U.NATION
+		FROM RSV R, USER U
+		WHERE R.RSV_ID = #{value}
+			AND R.USR_ID = U.USR_ID
+	</select>
+	
+	<!-- 알림톡 전송 로그  -->
+	<insert id="insertKakaoLog">
+	/* insertKakaoLog */
+		INSERT INTO KAKAO_LOG(
+			USR_ID
+			, MSG
+			, TEMPLETE
+			, REG_DTTM
+		) VALUES (
+			#{usrId}
+			, #{msg}
+			, #{templete}
+			, NOW()
+		)
+	</insert>
+	
+	<!-- 멤버십 예약 취소 내역 등록 -->
+	<insert id="insertMARsvCancel">
+	/* insertMARsvCancel */
+		INSERT INTO MEMBER_ACTIVE(
+			MEMBER_ID
+			, STORE_ID
+			, RSV_ID
+			, GET_AMNT
+			, TP
+			, UNIT
+			, BASIC_RATE
+			, PAY_AMNT
+			, REG_DTTM
+		)
+		SELECT
+			MEMBER_ID
+			, STORE_ID
+			, RSV_ID
+			, GET_AMNT
+			, 'CF'
+			, UNIT
+			, BASIC_RATE
+			, PAY_AMNT
+			, NOW()
+		FROM MEMBER_ACTIVE
+		WHERE RSV_ID = #{value}
+			AND TP = 'V'
+	</insert>
+	
+	<!-- 예약취소로 인한 멤버십 내역 복원 -->
+	<update id="updateMemberCost">
+	/* updateMemberCost */
+		UPDATE MEMBER M, MEMBER_ACTIVE MA
+			SET M.COST = M.COST + MA.GET_AMNT
+		WHERE MA.RSV_ID = #{value}
+			AND MA.TP = 'CF'
+			AND MA.MEMBER_ID = M.MEMBER_ID
+	</update>
+	
+	<!-- 가상계좌 정보  -->
+	<select id="selectVbInfo" resultType="map">
+	/* selectVbInfo */
+		SELECT
+			CAST(AES_DECRYPT(VBANK_NM, SHA2(#{encKey},512)) AS CHAR) VBANK_NM
+			, CAST(AES_DECRYPT(VBANK_CD, SHA2(#{encKey},512)) AS CHAR) VBANK_CD
+			, CAST(AES_DECRYPT(VBANK_HOLDER, SHA2(#{encKey},512)) AS CHAR) VBANK_HOLDER
+			, DATE_FORMAT(VBANK_DUE, '%Y.%m.%d %H:%i:%s') VBANK_DUE
+		FROM RSV
+		WHERE RSV_ID = #{rsvId}
+			AND RSV_ST = 'M'
+	</select>
+	
+	<!-- 예약 알람 등록 -->
+	<insert id="insertAlarm">
+	/* insertAlarm */
+		INSERT INTO ALARM(
+			USR_ID
+			, ARM_TP
+			, ARM_ST
+			, ARM_TITLE
+			, ARM_TARGET
+			, ARM_VAL
+			, REG_DTTM
+		)
+		SELECT
+			USR_ID
+			, #{armTp}
+			, 'N'
+			, #{armTitle}
+			, #{armTarget}
+			, #{armVal}
+			, NOW()
+		FROM RSV
+		WHERE RSV_ID = #{rsvId}
+	</insert>
+	
+
+	<!-- 예약 엑셀 리스트 -->
+	<select id="getRsvExcelList" resultType="rsvListVO">
+		/* getRsvExcelList */
+		SELECT
+			R.RSV_ID
+			, R.RSV_NO
+			, S.STORE_ID
+			, CASE WHEN R.RSV_FORM = 'R' THEN S.STORE_NM ELSE SUBSTRING_INDEX(SUBSTRING_INDEX(CAST(AES_DECRYPT(R.RSV_ADDR, SHA2(#{encKey},512)) AS CHAR), ' ', 3), ' ', -2) END STORE_NM
+			, DATE_FORMAT(R.REG_DTTM, '%Y.%m.%d %H:%i:%s') REG_DTTM
+			, CONCAT(R.RSV_DT, ' ', R.RSV_TM) RSV_DT
+			, R.UNIT
+			, R.RSV_AMNT
+			, R.GET_AMNT
+			, R.RSV_AMNT_WEYS
+			, ROUND(R.BASIC_RATE_WEYS, 2) BASIC_RATE_WEYS
+			, R.RSV_AMNT_USER
+			, ROUND(R.BASIC_RATE_USER, 2) BASIC_RATE_USER
+			, CAST((R.BASIC_RATE_USER - R.BASIC_RATE_WEYS) * R.RSV_AMNT_USER AS INT) COMMIS
+			, R.CMS
+			, CASE WHEN U.FORIGN = 'Y' THEN CONCAT(CAST(AES_DECRYPT(U.GIV_NM, SHA2(#{encKey},512)) AS CHAR), ' ', CAST(AES_DECRYPT(U.SUR_NM, SHA2(#{encKey},512)) AS CHAR))
+				ELSE CAST(AES_DECRYPT(IFNULL(U.USR_NM, R.RSV_NM), SHA2(#{encKey},512)) AS CHAR) END RSV_NM
+			, CAST(AES_DECRYPT(U.USR_TEL, SHA2(#{encKey},512)) AS CHAR) USR_TEL
+			, CAST(AES_DECRYPT(R.VBANK_NM, SHA2(#{encKey},512)) AS CHAR) VBANK_NM
+			, IFNULL(A.ADMIN_NAME, '') ADMIN_NAME
+			, R.RSV_ST
+		FROM RSV R
+		INNER JOIN STORE S ON R.STORE_ID = S.STORE_ID
+		INNER JOIN USER U ON R.USR_ID = U.USR_ID
+		LEFT OUTER JOIN ADMIN A ON R.ADMIN_KEY = A.ADMIN_KEY
+		WHERE R.RSV_DT BETWEEN #{startDt} AND #{endDt}
+		<if test='rsvStVal != null'>
+			AND R.RSV_ST IN 
+			<foreach collection="listData" item="item" separator="," open="(" close=")">
+				#{item}
+			</foreach>
+		</if>
+		<if test='rsvFormVal != null'>
+			AND R.RSV_FORM IN 
+			<foreach collection="listData1" item="item" separator="," open="(" close=")">
+				#{item}
+			</foreach>
+		</if>
+		<if test='searchType != null and searchType != "t"'>
+			AND S.STORE_NM = #{searchType}
+		</if>
+		ORDER BY R.RSV_DT, R.RSV_TM
+	</select>
+	
+	<!-- 담당자 키 불러오기 -->
+	<select id="selectManagerKey" resultType="int">
+	/* selectManagerKey */
+		SELECT
+			A.ADMIN_KEY
+		FROM RSV R, ADMIN A
+		WHERE R.RSV_ID = #{value}
+			AND R.STORE_ID = A.STORE_ID
+			AND A.ADMIN_TP = 'M'
+		LIMIT 1
+	</select>
+	
+	<!-- 가상계좌 입금 완료 -->
+	<update id="updateRsvIncome">
+	/* updateRsvIncome */
+		UPDATE RSV
+			SET RSV_ST = #{toBe}
+				, ADMIN_KEY = #{adminKey}
+				, MOD_DTTM = NOW()
+				, ICM_DTTM = NOW()
+		WHERE RSV_ID = #{rsvId}
+			AND RSV_ST = 'S'
+	</update>
+	
+	<!-- 가상계좌 입금 상태 변경 -->
+	<insert id="insertRsvLogVO">
+	/* insertRsvLogVO */
+		INSERT INTO RSV_LOG(
+			RSV_ID
+			, AS_IS
+			, TO_BE
+			, REG_DTTM
+		)
+		SELECT
+			RSV_ID
+			, #{asIs}
+			, #{toBe}
+			, NOW()
+		FROM RSV
+		WHERE RSV_ID = #{rsvId}
+	</insert>
+	
+	<!-- 예약 qr등록 -->
+	<update id="updateQrCode">
+	/* updateQrCode */
+		UPDATE RSV
+			SET RSV_QR = #{qr}
+				, RSV_QR_IMG = #{qrCodeUrl}
+		WHERE RSV_ID = #{rsvId}
+	</update>
+	
+	<!-- 멤버십, 예약 가상계좌 구분 -->
+	<select id="selectRsvForm" resultType="map">
+	/* selectRsvForm */
+		SELECT
+			R.RSV_FORM
+			, S.STORE_CENTER
+			, S.STORE_TAG
+		FROM RSV R, STORE S
+		WHERE R.RSV_ST = 'R'
+			AND R.RSV_ID = #{value}
+			AND R.STORE_ID = S.STORE_ID
+	</select>
+	
+	<!-- 예약금 입금에 대한 정보 -->
+	<select id="selectResPayInfo" resultType="map">
+	/* selectResPayInfo */
+		SELECT
+			CASE WHEN U.FORIGN = 'Y' THEN CONCAT(CAST(AES_DECRYPT(U.GIV_NM, SHA2(#{encKey},512)) AS CHAR), ' ', CAST(AES_DECRYPT(U.SUR_NM, SHA2(#{encKey},512)) AS CHAR))
+				ELSE CAST(AES_DECRYPT(IFNULL(U.USR_NM, R.RSV_NM), SHA2(#{encKey},512)) AS CHAR) END RSV_NM
+			, R.RSV_NO
+			, IFNULL(R.USR_ID, 0) USR_ID
+			, R.RSV_ID
+			, R.UNIT
+			, R.RSV_AMNT
+			, R.GET_AMNT
+			, R.RSV_QR
+			, CONCAT(S.STORE_NM, ' ', S.STORE_ADDR) STORE_NM
+			, CONCAT(CAST(AES_DECRYPT(R.RSV_ADDR, SHA2(#{encKey},512)) AS CHAR), ' ', CAST(AES_DECRYPT(R.RSV_ADDR_DETAIL, SHA2(#{encKey},512)) AS CHAR)) ADDR
+			, R.RSV_DT
+			, R.RSV_TM
+			, S.DELIVER_TIME
+			, IFNULL(U.NATION, '82') NATION
+			, CAST(AES_DECRYPT(IFNULL(U.USR_TEL, R.RSV_TEL), SHA2(#{encKey},512)) AS CHAR) USR_TEL
+			, CAST(AES_DECRYPT(IFNULL(U.USR_EMAIL, R.RSV_EMAIL), SHA2(#{encKey},512)) AS CHAR) USR_EMAIL
+			, S.STORE_TEL ADMIN_TEL
+			, UN.UNIT_NM
+		FROM RSV R
+		INNER JOIN STORE S ON R.STORE_ID = S.STORE_ID
+		INNER JOIN UNIT UN ON R.UNIT = UN.UNIT_CD
+		LEFT OUTER JOIN USER U ON R.USR_ID = U.USR_ID
+		LEFT OUTER JOIN ADMIN A ON R.ADMIN_KEY = A.ADMIN_KEY
+		WHERE R.RSV_ID = #{rsvId}
+	</select>
+	
+	<!-- 담당자 연락처 -->
+	<select id="selectMngList" resultType="string">
+	/* selectMngList */
+		SELECT
+			CAST(AES_DECRYPT(MG_TEL, SHA2(#{value},512)) AS CHAR) MG_TEL
+		FROM MANAGER
+		WHERE MG_ST = 'Y'
+	</select>
+	
+	<!-- 멤버십, 예약 가상계좌 푸시 발송 -->
+	<select id="selectVbFinUuid" resultType="map">
+	/* selectVbFinUuid */
+		SELECT
+			T.UUID
+			, T.OS
+			, 'R' TYPE
+		FROM RSV R
+		LEFT OUTER JOIN USER_TOKEN T ON R.USR_ID = T.USR_ID
+		WHERE R.RSV_ID = #{rsvId}
+			AND T.UUID != ''
+			AND T.PUSH_ST = 'Y'
+			AND T.UUID IS NOT NULL
+	</select>
+	
+	<!-- 보너스 사용한 예약건인지 확인 -->
+	<select id="selectCheckUseCost" resultType="int">
+	/* selectCheckUseCost */
+		SELECT
+			RSV_AMNT_WEYS
+		FROM RSV
+		WHERE RSV_ID = #{value}
+	</select>
+	
+	<!-- 예약 멤버십 복구 -->
+	<update id="updateReturnMemCost">
+	/* updateReturnMemCost */
+		UPDATE MEMBER M, MEMBER_ACTIVE MA
+			SET M.COST = M.COST + MA.GET_AMNT
+				, MA.TP = 'VC'
+		WHERE MA.RSV_ID = #{value}
+			AND MA.MEMBER_ID = M.MEMBER_ID
+	</update>
+	
+	<!-- 예약 멤버십 복구 -->
+	<update id="updateReturnUseCost">
+	/* updateReturnUseCost */
+		UPDATE MEMBER_ACTIVE MA, RSV_ACTIVE RA
+			SET MA.USE_COST = MA.USE_COST + RA.COST
+		WHERE RA.RSV_ID = #{value}
+			AND RA.ACT = 'U'
+			AND RA.ACTIVE_ID = MA.ACTIVE_ID
+			AND MA.DUE_DTTM &gt; NOW()
+	</update>
+	
+	<!-- 예약 멤버십 복구 -->
+	<insert id="insertReturnRA">
+	/* insertReturnRA */
+		INSERT INTO RSV_ACTIVE(
+			RSV_ID
+			, ACTIVE_ID
+			, COST
+			, ACT
+			, REG_DTTM
+		)
+		SELECT
+			RSV_ID
+			, ACTIVE_ID
+			, COST
+			, 'R'
+			, NOW()
+		FROM RSV_ACTIVE
+		WHERE RSV_ID = #{value}
+	</insert>
+	
+	<!-- 지점 돈 인출 로그 -->
+	<insert id="insertReturnMoneyLog">
+	/* insertReturnMoneyLog */
+		INSERT INTO STORE_MONEY_LOG(
+			STORE_ID
+			, UNIT
+			, TYPE
+			, ST
+			, GET_AMNT
+			, PAY_AMNT
+			, BEF_AMNT
+			, AFT_AMNT
+			, REG_DTTM
+		)
+		SELECT
+			SM.STORE_ID
+			, R.UNIT
+			, 'R'
+			, 'C'
+			, 0
+			, R.RSV_AMNT
+			, SM.AMNT
+			, SM.AMNT + CONVERT(R.RSV_AMNT, SIGNED)
+			, NOW()
+		FROM RSV R, STORE_MONEY SM, UNIT U
+		WHERE R.RSV_ID = #{rsvId}
+			AND R.UNIT = U.UNIT_CD
+			AND U.UNIT_ID = SM.UNIT_ID
+			AND SM.STORE_ID = #{storeId}
+			AND SM.TYPE = 'R'
+	</insert>
+	
+	<!-- 취소 시 지점 돈 복구  -->
+	<update id="updateReturnMoney">
+	/* updateReturnMoney */
+		UPDATE STORE_MONEY SM, (SELECT
+				U.UNIT_ID
+				, R.RSV_AMNT
+			FROM RSV R, UNIT U
+			WHERE R.RSV_ID = #{rsvId}
+				AND R.UNIT = U.UNIT_CD) R
+			SET SM.AMNT = SM.AMNT + CONVERT(R.RSV_AMNT, SIGNED)
+		WHERE SM.STORE_ID = #{storeId}
+			AND SM.TYPE = 'R'
+			AND SM.UNIT_ID = R.UNIT_ID
+	</update>
+	
+	<!-- 입금 시간 지난 예약 상태 변경 -->
+	<select id="selectRsvMissIncomeCp" resultType="map">
+	/* selectRsvMissIncomeCp */
+		SELECT
+			COUPON_ID
+			, BONUS_ID
+		FROM RSV
+		WHERE RSV_ID = #{value}
+	</select>
+	
+	<!-- 예약 미입금 사용된 쿠폰 처리 -->
+	<update id="updateReturnCoupon">
+	/* updateReturnCoupon */
+		UPDATE COUPON_HIST CH, COUPON_INFO CI
+			SET CH.USE_DT = NULL
+				, CH.STORE_ID = NULL
+				, CH.USE_ST = 'Y'
+		WHERE CH.ID = #{value}
+			AND CH.DUE_DT &gt; NOW()
+			AND CH.COUPON_ID = CI.COUPON_ID
+			AND CI.COUPON_TP IN ('D', 'DD', 'DR', 'P', 'C')
+	</update>
+	
+	<!-- 입금 시간 지난 예약 상태 변경 -->
+	<update id="updateRsvMiss">
+	/* updateRsvMiss */
+		UPDATE RSV
+			SET RSV_ST = 'M'
+				, MOD_DTTM = NOW()
+		WHERE RSV_ID = #{value}
+	</update>
+	
+	<!-- 예약상태 확인 -->
+	<select id="checkRsvSt" resultType="string">
+	/* checkRsvSt */
+		SELECT
+			RSV_ST
+		FROM RSV
+		WHERE RSV_ID = #{value}
+	</select>
+	
+	<!-- 예약일 수정 -->
+	<update id="updateRsvDt">
+	/* updateRsvDt */
+		UPDATE RSV
+			SET RSV_DT = #{rsvDt}
+				, RSV_TM = #{rsvTm}
+				, MOD_DTTM = NOW()
+		WHERE RSV_ID = #{rsvId}
+	</update>
+	
+	<!-- 예약금 준비상태 -->
+	<update id="updateRsvReady">
+	/* updateRsvReady */
+		UPDATE RSV
+			SET ADMIN_ST = 'R'
+		WHERE RSV_ID = #{value}
+			AND ADMIN_ST = 'N'
+	</update>
+	
+	<!-- 예약금 준비상태 내역 -->
+	<insert id="insertReadyRsv">
+	/* insertReadyRsv */
+		INSERT INTO RSV_READY_LOG(
+			RSV
+			, AMNT
+			, LOG
+			, REG_DTTM
+		) VALUES (
+			#{rsvId}
+			, #{amnt}
+			, #{log}
+			, NOW()
+		)
+	</insert>
+	
+	<!-- 예약지점 리스트 가져오기 -->
+	<select id="selectAdminStoreList" resultType="map">
+		/* selectAdminStoreList */
+		SELECT
+			S.STORE_ID
+			, S.STORE_NM
+		FROM ADMIN_STORE A, STORE S
+		WHERE A.ADMIN_KEY = #{value}
+			AND A.STORE_ID = S.STORE_ID
+			AND S.STORE_ST = 'Y'
+			AND S.STORE_RSV = 'Y'
+	</select>
+	
+	<!-- 예약 취소 리스트 옉셀 -->
+	<select id="selectRsvCancelExcel" resultType="rsvListVO">
+		/* selectRsvCancelExcel */
+		SELECT
+			DATE_FORMAT(R.CANCEL_DTTM, '%Y.%m.%d %H:%i:%s') CANCEL_DTTM
+			, CASE WHEN U.FORIGN = 'Y' THEN CONCAT(CAST(AES_DECRYPT(U.GIV_NM, SHA2(#{encKey},512)) AS CHAR), ' ', CAST(AES_DECRYPT(U.SUR_NM, SHA2(#{encKey},512)) AS CHAR))
+				ELSE CAST(AES_DECRYPT(IFNULL(U.USR_NM, R.RSV_NM), SHA2(#{encKey},512)) AS CHAR) END RSV_NM
+			, R.CANCEL_AMNT
+			, CAST(AES_DECRYPT(R.RET_BANK_NM, SHA2(#{encKey},512)) AS CHAR) RET_BANK_NM
+			, CAST(AES_DECRYPT(R.RET_BANK_CD, SHA2(#{encKey},512)) AS CHAR) RET_BANK_CD
+		FROM RSV R
+		LEFT OUTER JOIN USER U ON R.USR_ID = U.USR_ID
+		WHERE R.CANCEL_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+			AND R.RSV_ST = 'CR'
+		ORDER BY R.CANCEL_DTTM
+	</select>
+	
+	<!-- 예약 정보 -->
+	<select id="selectRsvStoreInfo" resultType="map">
+		/* selectRsvStoreInfo */
+		SELECT
+			R.STORE_ID
+			, CASE WHEN U.FORIGN = 'Y' THEN CONCAT(CAST(AES_DECRYPT(U.GIV_NM, SHA2(#{encKey},512)) AS CHAR), ' ', CAST(AES_DECRYPT(U.SUR_NM, SHA2(#{encKey},512)) AS CHAR))
+				ELSE CAST(AES_DECRYPT(IFNULL(U.USR_NM, R.RSV_NM), SHA2(#{encKey},512)) AS CHAR) END RSV_NM
+			, R.UNIT
+		FROM RSV R
+		LEFT OUTER JOIN USER U ON R.USR_ID = U.USR_ID
+		WHERE R.RSV_ID = #{rsvId}
+	</select>
+	
+	<!-- 예약 정보 -->
+	<select id="selectRsvStoreList" resultType="map">
+		/* selectRsvStoreList */
+		SELECT
+			S.STORE_ID
+			, S.STORE_NM
+		FROM STORE S, RSV_UNIT R, UNIT U
+		WHERE S.STORE_RSV = 'Y'
+			AND S.STORE_ID = R.STORE_ID
+			AND R.UNIT_ID = U.UNIT_ID
+			AND U.RSV_ST = 'Y'
+			AND U.UNIT_CD = #{value}
+	</select>
+	
+	<!-- 지점 변경 -->
+	<update id="updateRsvStore">
+		/* updateRsvStore */
+		UPDATE RSV
+			SET STORE_ID = #{storeId}
+		WHERE RSV_ID = #{rsvId}
+	</update>
+	
+	<!-- 담당자 기기 uuid -->
+	<select id="selectAdminUuid" resultType="string">
+		/* selectAdminUuid */
+		SELECT
+			UUID
+		FROM ADMIN_TOKEN
+		WHERE UUID != ''
+	</select>
+	
+	<!-- 입금시간 초과 UUID -->
+	<select id="selectMissUuid"  resultType="map">
+		/* selectMissUuid */
+		SELECT 
+			UT.UUID
+			, UT.OS
+			, R.USR_ID
+			, R.UNIT
+			, R.RSV_AMNT
+			, IFNULL(U.NATION, '82') NATION
+			, CASE WHEN U.FORIGN = 'Y' THEN CONCAT(CAST(AES_DECRYPT(U.GIV_NM, SHA2(#{encKey},512)) AS CHAR), ' ', CAST(AES_DECRYPT(U.SUR_NM, SHA2(#{encKey},512)) AS CHAR))
+				ELSE CAST(AES_DECRYPT(IFNULL(U.USR_NM, R.RSV_NM), SHA2(#{encKey},512)) AS CHAR) END RSV_NM
+			, CAST(AES_DECRYPT(IFNULL(U.USR_TEL, R.RSV_TEL), SHA2(#{encKey},512)) AS CHAR) RSV_TEL
+		FROM RSV R
+		LEFT OUTER JOIN USER U ON R.USR_ID = U.USR_ID
+		LEFT OUTER JOIN USER_TOKEN UT ON R.USR_ID = UT.USR_ID
+		WHERE R.RSV_ID = #{rsvId}
+	</select>
+	
+	<!-- 예약 보너스 사용여부 확인 -->
+	<select id="selectRsvBonusId"  resultType="int">
+		/* selectRsvBonusId */
+		SELECT 
+			BONUS_ID
+		FROM RSV
+		WHERE RSV_ID = #{value}
+			AND RSV_ST = 'M'
+	</select>
+	
+	<!-- 쿠폰 사용 처리 -->
+	<update id="updateCouponBack">
+		/* updateCouponBack */
+		UPDATE COUPON_HIST
+			SET USE_DT = NOW()
+				, USE_ST = 'D'
+		WHERE ID = #{value}
+			AND USE_ST = 'Y'
+			AND DUE_DT &gt; NOW()
+	</update>
+	
+	<!-- 예약 상태 시작으로 변경 -->
+	<update id="updateRsvBack">
+		/* updateRsvBack */
+		UPDATE RSV
+			SET RSV_ST = 'S'
+		WHERE RSV_ID = #{value}
+	</update>
+	
+	<!-- 예약 가능한 통화 -->
+	<select id="selectRsvUnitList" resultType="map">
+		/* selectRsvUnitList */
+		SELECT
+			UNIT_CD
+			, UNIT_NM
+		FROM UNIT
+		WHERE UNIT_ST = 'Y'
+			AND RSV_ST = 'Y'
+		ORDER BY UNIT_SEQ
+	</select>
+	
+	<!-- 예약환불 복구 -->
+	<update id="updateRsvBackCancel">
+		/* updateRsvBackCancel */
+		UPDATE RSV
+			SET RSV_ST = 'R'
+		WHERE RSV_ID = #{value}
+			AND RSV_ST = 'CR'
+	</update>
+	
+	<!-- 예약 메모 리스트 -->
+	<select id="selectRsvMemo" resultType="map">
+		/* selectRsvMemo */
+		SELECT 
+			DATE_FORMAT(REG_DTTM, '%Y.%m.%d %H:%i:%s') REG_DTTM
+			, MEMO
+			, ADMIN
+		FROM RSV_MEMO 
+		WHERE RSV_ID = #{rsvId}
+		ORDER BY REG_DTTM DESC
+	</select>
+	
+	<!-- 예약 메모 등록 -->
+	<insert id="insertRsvMemo">
+		/* insertRsvMemo */
+		INSERT INTO RSV_MEMO(
+			RSV_ID
+			, MEMO
+			, ADMIN
+			, REG_DTTM
+		) VALUES (
+			#{rsvId}
+			, #{text}
+			, #{admin}
+			, NOW()
+		)
+	</insert>
+	
+	<!-- 그룹 예약 수 -->
+	<select id="selectGrpCnt" resultType="int">
+		/* selectGrpCnt */
+		SELECT
+			COUNT(RSV_ID)
+		FROM RSV
+		WHERE RSV_DT = #{dt}
+			AND RSV_ST = 'R'
+			AND ADMIN_ST = 'Y'
+			AND GRP_ST = 'N'
+			AND STORE_ID = #{storeId}
+	</select>
+	
+	<!-- 그룹 예약 수 -->
+	<select id="selectRsvGroup" resultType="rsvListVO">
+		/* selectRsvGroup */
+		SELECT
+			CASE WHEN U.FORIGN = 'Y' THEN CONCAT(CAST(AES_DECRYPT(U.GIV_NM, SHA2(#{encKey},512)) AS CHAR), ' ', CAST(AES_DECRYPT(U.SUR_NM, SHA2(#{encKey},512)) AS CHAR))
+						ELSE CAST(AES_DECRYPT(IFNULL(U.USR_NM, R.RSV_NM), SHA2(#{encKey},512)) AS CHAR) END RSV_NM
+			, R.RSV_QR
+			, R.UNIT
+			, R.RSV_AMNT
+			, R.RSV_TM
+		FROM RSV R
+		LEFT OUTER JOIN USER U ON R.USR_ID = U.USR_ID
+		WHERE R.RSV_DT = #{rsvDt}
+			AND R.RSV_ST = 'R'
+			AND R.ADMIN_ST = 'Y'
+			AND R.GRP_ST = 'N'
+			AND R.STORE_ID = #{storeId}
+		ORDER BY R.RSV_TM
+	</select>
+	
+	<!-- 그룹 예약 수 -->
+	<select id="selectRsvGroupView" resultType="rsvListVO">
+		/* selectRsvGroupView */
+		SELECT
+			CASE WHEN U.FORIGN = 'Y' THEN CONCAT(CAST(AES_DECRYPT(U.GIV_NM, SHA2(#{encKey},512)) AS CHAR), ' ', CAST(AES_DECRYPT(U.SUR_NM, SHA2(#{encKey},512)) AS CHAR))
+						ELSE CAST(AES_DECRYPT(IFNULL(U.USR_NM, R.RSV_NM), SHA2(#{encKey},512)) AS CHAR) END RSV_NM
+			, CASE WHEN U.FORIGN = 'Y' THEN CAST(AES_DECRYPT(U.PASS_NO, SHA2(#{encKey},512)) AS CHAR)
+						ELSE LEFT(CAST(AES_DECRYPT(IFNULL(U.USR_NM_ID, R.RSV_NM_ID), SHA2(#{encKey},512)) AS CHAR), 6) END RSV_NM_ID
+			, RIGHT(CAST(AES_DECRYPT(IFNULL(U.USR_TEL, R.RSV_TEL), SHA2(#{encKey},512)) AS CHAR), 4) USR_TEL
+			, R.RSV_QR
+			, R.UNIT
+			, R.RSV_AMNT
+			, R.RSV_TM
+			, CASE WHEN G.GRP_ST = 'M' THEN '변경' WHEN G.GRP_ST = 'C' THEN '취소' WHEN G.GRP_ST = 'N' THEN '미수령' ELSE '대기' END RSV_ST
+		FROM RSV_GROUP_LOG G
+		INNER JOIN RSV R ON G.RSV_ID = R.RSV_ID
+		LEFT OUTER JOIN USER U ON R.USR_ID = U.USR_ID
+		WHERE G.GROUP_ID = #{groupId}
+		ORDER BY R.RSV_DT, R.RSV_TM
+	</select>
+	
+	<!-- 그룹 예약 수 -->
+	<select id="selectGroupCnt" resultType="map">
+		/* selectGroupCnt */
+		SELECT
+			COUNT(R.RSV_ID) CNT
+			, R.UNIT
+		FROM RSV R
+		WHERE R.RSV_DT = #{rsvDt}
+			AND R.RSV_ST = 'R'
+			AND R.ADMIN_ST = 'Y'
+			AND R.GRP_ST = 'N'
+			AND R.STORE_ID = #{storeId}
+		GROUP BY R.UNIT
+	</select>
+	
+	<!-- 그룹 예약 수 -->
+	<select id="selectGroupCntView" resultType="map">
+		/* selectGroupCntView */
+		SELECT
+			COUNT(R.RSV_ID) CNT
+			, R.UNIT
+		FROM RSV_GROUP_LOG G
+		INNER JOIN RSV R ON G.RSV_ID = R.RSV_ID
+		WHERE G.GROUP_ID = #{groupId}
+		GROUP BY R.UNIT
+	</select>
+	
+	<!-- 그룹 qr 생성 -->
+	<select id="selectGrpQrCnt" resultType="int">
+		/* selectGrpQrCnt */
+		SELECT
+			IFNULL(COUNT(GROUP_ID), 0)
+		FROM RSV_GROUP
+		WHERE BARCODE = #{value}
+	</select>
+	
+	<!-- 그룹 생성 -->
+	<insert id="insertRsvGroup" useGeneratedKeys="true" keyProperty="groupId">
+		/* insertRsvGroup */
+		INSERT INTO RSV_GROUP(
+			RSV_DT
+			, STORE_ID
+			, ADMIN_KEY
+			, BARCODE
+			, BARCODE_URL
+			, GROUP_TP
+			, REG_DTTM
+		) VALUES (
+			#{rsvDt}
+			, #{storeId}
+			, #{adminKey}
+			, #{barcode}
+			, #{barcodeUrl}
+			, #{groupTp}
+			, NOW()
+		)
+	</insert>
+	
+	<!-- 그룹 로그 생성 -->
+	<insert id="insertRsvGrpLog">
+		/* insertRsvGrpLog */
+		INSERT INTO RSV_GROUP_LOG(
+			GROUP_ID
+			, RSV_ID
+			, REG_DTTM
+		)
+		SELECT
+			#{groupId}
+			, RSV_ID
+			, NOW()
+		FROM RSV
+		WHERE RSV_DT = #{rsvDt}
+			AND RSV_ST = 'R'
+			AND ADMIN_ST = 'Y'
+			AND GRP_ST = 'N'
+			AND STORE_ID = #{storeId}
+	</insert>
+	
+	<!-- 그룹 로그 생성 -->
+	<insert id="insertRsvGrpLogAD">
+		/* insertRsvGrpLogAD */
+		INSERT INTO RSV_GROUP_LOG(
+			GROUP_ID
+			, RSV_ID
+			, REG_DTTM
+		)
+		SELECT
+			#{groupId}
+			, RSV_ID
+			, NOW()
+		FROM RSV
+		WHERE ((RSV_DT = #{startDt} AND RSV_TM &gt; #{rsvTm}) OR (RSV_DT = #{endDt} AND RSV_TM &lt; #{rsvTm}))
+			AND RSV_ST = 'R'
+			AND ADMIN_ST = 'Y'
+			AND GRP_ST = 'N'
+			AND STORE_ID = #{storeId}
+	</insert>
+	
+	<!-- 그룹 회수 로그 생성 -->
+	<insert id="insertRsvRetGrpLog">
+		/* insertRsvRetGrpLog */
+		INSERT INTO RSV_GROUP_LOG(
+			GROUP_ID
+			, RSV_ID
+			, GRP_ST
+			, REG_DTTM
+		)
+		SELECT
+			#{groupId}
+			, RGL.RSV_ID
+			, RGL.GRP_ST
+			, NOW()
+		FROM RSV_GROUP_LOG RGL, RSV_GROUP RG
+		WHERE RG.RSV_DT = #{retDt}
+			AND RG.GROUP_TP = 'D'
+			AND RG.STORE_ID =  #{storeId}
+			AND RG.GROUP_ID = RGL.GROUP_ID
+			AND RGL.GRP_ST IN ('M', 'C')
+	</insert>
+	
+	<!-- 그룹 예약 인수 -->
+	<update id="updateRsvGrp">
+		/* updateRsvGrp */
+		UPDATE RSV
+			SET GRP_ST = 'Y'
+		WHERE RSV_DT = #{rsvDt}
+			AND RSV_ST = 'R'
+			AND ADMIN_ST = 'Y'
+			AND GRP_ST = 'N'
+			AND STORE_ID = #{storeId}
+	</update>
+	
+	<!-- 그룹 예약 인수 -->
+	<update id="updateRsvGrpAD">
+		/* updateRsvGrpAD */
+		UPDATE RSV
+			SET GRP_ST = 'Y'
+		WHERE ((RSV_DT = #{startDt} AND RSV_TM &gt; #{rsvTm}) OR (RSV_DT = #{endDt} AND RSV_TM &lt; #{rsvTm}))
+			AND RSV_ST = 'R'
+			AND ADMIN_ST = 'Y'
+			AND GRP_ST = 'N'
+			AND STORE_ID = #{storeId}
+	</update>
+	
+	<!-- 지점 명-->
+	<select id="selectStoreNm" resultType="map">
+		/* selectStoreNm */
+		SELECT
+			STORE_NM
+		FROM STORE
+		WHERE STORE_ID = #{value}
+	</select>
+	
+	<!-- 그룹 내역 리스트 -->
+	<select id="getGrpList" resultType="groupVO">
+		/* getGrpList */
+		SELECT
+			G.GROUP_ID
+			, G.RSV_DT
+			, IFNULL(C.GRP_CNT, 0) GRP_CNT
+			, S.STORE_NM
+			, G.GROUP_ST
+			, G.GROUP_TP
+		FROM RSV_GROUP G
+		INNER JOIN STORE S ON G.STORE_ID = S.STORE_ID
+		LEFT OUTER JOIN (
+		SELECT
+			COUNT(RSV_ID) GRP_CNT
+			, GROUP_ID
+		FROM RSV_GROUP_LOG
+		GROUP BY GROUP_ID
+		) C ON G.GROUP_ID = C.GROUP_ID
+		WHERE G.RSV_DT BETWEEN #{startDt} AND #{endDt}
+		<if test='searchType != null and searchType != "t"'>
+			AND G.STORE_ID = #{searchType}
+		</if>
+		ORDER BY G.RSV_DT DESC
+		LIMIT #{pageSize} OFFSET #{searchPage}
+	</select>
+	
+	<!-- 그룹 내역 리스트 -->
+	<select id="getGrpListCnt" resultType="int">
+		/* getGrpListCnt */
+		SELECT
+			COUNT(G.GROUP_ID)
+		FROM RSV_GROUP G
+		WHERE G.RSV_DT BETWEEN #{startDt} AND #{endDt}
+		<if test='searchType != null and searchType != "t"'>
+			AND G.STORE_ID = #{searchType}
+		</if>
+	</select>
+	
+	<!-- 그룹 내역 리스트 -->
+	<select id="selectGrpInfo" resultType="map">
+		/* selectGrpInfo */
+		SELECT
+			G.BARCODE qrCode
+			, G.BARCODE_URL
+			, G.RSV_DT
+			, S.STORE_NM
+			, G.GROUP_TP
+		FROM RSV_GROUP G, STORE S
+		WHERE G.GROUP_ID = #{value}
+			AND G.STORE_ID = S.STORE_ID
+	</select>
+	
+	<!-- 기존 예약 정보 -->
+	<select id="selectRsvInfo" resultType="map">
+		/* selectRsvInfo */
+		SELECT
+			RSV_DT
+			, ADMIN_ST
+		FROM RSV
+		WHERE RSV_ID = #{rsvId}
+	</select>
+	
+	<!-- 인수된 센터 예약 날짜 변경시 -->
+	<update id="updateGrpLog">
+	/* updateGrpLog */
+		UPDATE RSV_GROUP_LOG RGL, RSV_GROUP RG, STORE S
+			SET RGL.GRP_ST = 'M'
+		WHERE RGL.RSV_ID = #{rsvId}
+			AND RGL.GRP_ST = 'Y'
+			AND RGL.GROUP_ID = RG.GROUP_ID
+			AND RG.STORE_ID = S.STORE_ID
+			AND S.STORE_CENTER = 'Y'
+	</update>
+	
+	<!-- 인수된 센터 예약 날짜 변경시 인수 해지 -->
+	<update id="updateRollBackRsv">
+	/* updateRollBackRsv */
+		UPDATE RSV
+			SET ADMIN_ST = 'N'
+				, GRP_ST = 'N'
+		WHERE RSV_ID = #{rsvId}
+	</update>
+	
+	<!-- 센터 리스트 -->
+	<select id="selectCenterList" resultType="int">
+		/* selectCenterList */
+		SELECT
+			STORE_ID
+		FROM STORE
+		WHERE STORE_CENTER = 'Y'
+			AND STORE_ST = 'Y'
+	</select>
+	
+	<!-- 센터 그룹 내역 확인 -->
+	<select id="selectExistGrp" resultType="int">
+		/* selectExistGrp */
+		SELECT
+			COUNT(GROUP_ID)
+		FROM RSV_GROUP
+		WHERE RSV_DT = #{rsvDt}
+			AND STORE_ID = #{storeId}
+	</select>
+	
+	<!-- 생성될 그룹 갯수 -->
+	<select id="selectRsvGrpCnt" resultType="int">
+		/* selectRsvGrpCnt */
+		SELECT
+			COUNT(RSV_ID)
+		FROM RSV
+		WHERE RSV_DT = #{rsvDt}
+			AND RSV_ST = 'R'
+			AND ADMIN_ST = 'Y'
+			AND GRP_ST = 'N'
+			AND STORE_ID = #{storeId}
+	</select>
+	
+	<!-- 생성될 그룹 갯수 -->
+	<select id="selectRsvGrpADCnt" resultType="int">
+		/* selectRsvGrpADCnt */
+		SELECT
+			COUNT(RSV_ID)
+		FROM RSV
+		WHERE ((RSV_DT = #{startDt} AND RSV_TM &gt; #{rsvTm}) OR (RSV_DT = #{endDt} AND RSV_TM &lt; #{rsvTm}))
+			AND RSV_ST = 'R'
+			AND ADMIN_ST = 'Y'
+			AND GRP_ST = 'N'
+			AND STORE_ID = #{storeId}
+	</select>
+	
+	
+	<!-- 생성될 반환 갯수 -->
+	<select id="selectRsvRet" resultType="map">
+		/* selectRsvRet */
+		SELECT
+			COUNT(RGL.RSV_ID)
+			, RGL.GRP_ST
+		FROM RSV_GROUP_LOG RGL, RSV_GROUP RG
+		WHERE RG.RSV_DT = #{retDt}
+			AND RG.GROUP_TP = 'D'
+			AND STORE_ID =  #{storeId}
+			AND RG.GROUP_ID = RGL.GROUP_ID
+			AND RGL.GRP_ST IN ('M', 'C')
+	</select>
+	
+	<!-- 정보 불일치 보냈는지 확인 -->
+	<select id="selectMissMatchKakao" resultType="int">
+		/* selectMissMatchKakao */
+		SELECT
+			COUNT(K.SEND_ID)
+		FROM RSV R, KAKAO_LOG K
+		WHERE R.RSV_ID = #{rsvId}
+			AND R.RSV_NO = K.RSV_NO
+			AND K.TEMPLETE = #{templete}
+	</select>
+	
+	<!-- 정보 불일치 보낸 로그 등록 -->
+	<insert id="insertMissmatchKakao">
+		/* insertMissmatchKakao */
+		INSERT INTO KAKAO_LOG(
+			RSV_NO
+			, MSG
+			, TEMPLETE
+			, REG_DTTM
+		)
+		SELECT
+			RSV_NO
+			, #{msg}
+			, #{templete}
+			, NOW()
+		FROM RSV
+		WHERE RSV_ID = #{rsvId}
+	</insert>
+	
+	<!-- 가상계좌 입금 정보 -->
+	<select id="getVbankList" resultType="map">
+		/* getVbankList */
+		SELECT
+			V.V_ID
+			, CAST(AES_DECRYPT(V.ICM_NM, SHA2(#{encKey},512)) AS CHAR) ICM_NM
+			, V.GET_AMNT
+			, V.MSG
+			, V.CHK_ST
+			, IFNULL(A.ADMIN_NAME, '') ADMIN_NAME
+			, DATE_FORMAT(V.REG_DTTM, '%Y.%m.%d %H:%i:%s') REG_DTTM
+		FROM VBANK_CHK V
+		LEFT OUTER JOIN ADMIN A ON V.ADMIN_KEY = A.ADMIN_KEY
+		WHERE V.REG_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+		<if test='searchText != null and searchText != ""'>
+			AND V.ICM_NM = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512)) 
+		</if>
+		<if test='rsvStVal != null'>
+			AND V.CHK_ST IN 
+			<foreach collection="listData" item="item" separator="," open="(" close=")">
+				#{item}
+			</foreach>
+		</if>
+		ORDER BY V.REG_DTTM DESC
+		LIMIT #{pageSize} OFFSET #{searchPage}
+	</select>
+	
+	<!-- 가상계좌 입금 정보 -->
+	<select id="getVbankListCnt" resultType="int">
+		/* getVbankListCnt */
+		SELECT
+			COUNT(V_ID)
+		FROM VBANK_CHK
+		WHERE REG_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+		<if test='searchText != null and searchText != ""'>
+			AND ICM_NM = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512)) 
+		</if>
+		<if test='rsvStVal != null'>
+			AND CHK_ST IN 
+			<foreach collection="listData" item="item" separator="," open="(" close=")">
+				#{item}
+			</foreach>
+		</if>
+	</select>
+	
+	<!-- 가상계좌 입금 정보 확인 -->
+	<update id="updateVbankChk">
+		/* updateVbankChk */
+		UPDATE VBANK_CHK
+			SET CHK_ST = #{chkSt}
+				, ADMIN_KEY = #{adminKey}
+		WHERE V_ID = #{vId}
+	</update>
+	
+	<!-- 취소할 예약정보 상태 -->
+	<select id="selectCancelSt" resultType="map">
+	/* selectCancelSt */
+		SELECT
+			R.RSV_ST
+			, S.STORE_CENTER
+			, R.USR_ID
+		FROM RSV R, STORE S
+		WHERE R.RSV_ID = #{rsvId}
+			AND R.RSV_ST = 'R'
+			AND R.STORE_ID = S.STORE_ID
+	</select>
+	
+	<!-- 취소 등록 -->
+	<update id="updateCancelRsv">
+	/* updateCancelRsv */
+		UPDATE RSV
+			SET RSV_ST = #{rsvSt}
+				, RET_BANK_NM = AES_ENCRYPT(#{retBankNm}, SHA2(#{encKey},512))
+				, RET_BANK_CD = AES_ENCRYPT(#{retBankCd}, SHA2(#{encKey},512))
+				, CANCEL_RATE = 0
+				, CANCEL_AMNT = GET_AMNT - #{retCms}
+				, CANCEL_CMS = #{retCms}
+				, MOD_DTTM = NOW()
+				, CANCEL_DTTM = NOW()
+		WHERE RSV_ID = #{rsvId}
+			AND RSV_ST = 'R'
+	</update>
+	
+	<!-- 예약취소 메일 보낼 정보 -->
+	<select id="selectCancelEmail" resultType="map">
+	/* selectCancelEmail */
+		SELECT
+			R.UNIT
+			, R.RSV_DT
+			, R.RSV_TM
+			, R.RSV_AMNT
+			, R.GET_AMNT
+			, U.UNIT_NM
+			, R.RSV_TP
+			, R.COUPON_ID
+			, R.BONUS_ID
+			, R.BASIC_RATE_USER
+			, R.BASIC_RATE_WEYS
+			, R.CMS
+			, DATE_FORMAT(R.CANCEL_DTTM, '%Y.%m.%d %H:%i') CANCEL_DTTM
+			, CASE WHEN USR.FORIGN = 'Y' THEN CONCAT(CAST(AES_DECRYPT(USR.GIV_NM, SHA2(#{encKey},512)) AS CHAR), ' ', CAST(AES_DECRYPT(USR.SUR_NM, SHA2(#{encKey},512)) AS CHAR))
+				ELSE CAST(AES_DECRYPT(IFNULL(USR.USR_NM, R.RSV_NM), SHA2(#{encKey},512)) AS CHAR) END RSV_NM
+			, CAST(AES_DECRYPT(USR.USR_TEL, SHA2(#{encKey},512)) AS CHAR) USR_TEL
+			, USR.NATION
+			, CAST(AES_DECRYPT(USR.USR_EMAIL, SHA2(#{encKey},512)) AS CHAR) RSV_EMAIL
+			, R.CANCEL_AMNT
+			, R.CANCEL_CMS
+			, R.COUPON_ID
+			, R.RSV_NO
+			, R.RSV_FORM
+			, CASE WHEN R.STORE_ID = 1 THEN S.STORE_ADDR ELSE S.STORE_NM END STORE_NM
+			, CAST(AES_DECRYPT(R.RSV_ADDR, SHA2(#{encKey},512)) AS CHAR) RSV_ADDR
+			, CAST(AES_DECRYPT(R.RSV_ADDR_DETAIL, SHA2(#{encKey},512)) AS CHAR) RSV_ADDR_DETAIL
+			, S.DELIVER_TIME
+		FROM RSV R, UNIT U, USER USR, STORE S
+		WHERE R.RSV_ID = #{rsvId}
+			AND R.UNIT = U.UNIT_CD
+			AND R.USR_ID = USR.USR_ID
+			AND R.STORE_ID = S.STORE_ID
+	</select>
+	
+	<!-- 쿠폰 환불 -->
+	<update id="updateCouponReturn">
+	/* updateCouponReturn */
+		UPDATE COUPON_HIST CH, COUPON_INFO CI
+			SET CH.USE_DT = NULL
+				, STORE_ID = NULL
+				, USE_ST = 'Y'
+		WHERE CH.ID = #{value}
+			AND CH.COUPON_ID = CI.COUPON_ID
+			AND CI.COUPON_TP IN ('DR', 'DD', 'P', 'C')
+			AND CI.END_DT &gt; NOW()
+	</update>
+	
+	<!-- 센터 당일 예약 취소 -->
+	<update id="updateRsvGrpCancelLog">
+	/* updateRsvGrpCancelLog */
+		UPDATE RSV_GROUP_LOG
+			SET GRP_ST = 'C'
+		WHERE RSV_ID = #{value}
+			AND GRP_ST = 'Y'
+	</update>
+	
+	<!-- uuid 정보 -->
+	<select id="selectUsrUuid" resultType="map">
+	/* selectUsrUuid */
+		SELECT
+			OS
+			, UUID
+		FROM USER_TOKEN
+		WHERE USR_ID = #{value}
+			AND PUSH_ST = 'Y'
+			AND UUID IS NOT NULL
+			AND UUID != ''
+	</select>
+	
+	<!-- 예약금 입금에 대한 정보 -->
+	<select id="selectTestInfo" resultType="map">
+	/* selectTestInfo */
+		SELECT
+			CASE WHEN U.FORIGN = 'Y' THEN CONCAT(CAST(AES_DECRYPT(U.GIV_NM, SHA2(#{encKey},512)) AS CHAR), ' ', CAST(AES_DECRYPT(U.SUR_NM, SHA2(#{encKey},512)) AS CHAR))
+				ELSE CAST(AES_DECRYPT(IFNULL(U.USR_NM, R.RSV_NM), SHA2(#{encKey},512)) AS CHAR) END RSV_NM
+			, R.RSV_NO
+			, IFNULL(R.USR_ID, 0) USR_ID
+			, R.RSV_ID
+			, R.UNIT
+			, R.RSV_AMNT
+			, R.GET_AMNT
+			, R.RSV_QR
+			, S.STORE_NM
+			, CONCAT(CAST(AES_DECRYPT(R.RSV_ADDR, SHA2(#{encKey},512)) AS CHAR), ' ', CAST(AES_DECRYPT(R.RSV_ADDR_DETAIL, SHA2(#{encKey},512)) AS CHAR)) ADDR
+			, R.RSV_DT
+			, R.RSV_TM
+			, DATE_FORMAT(ICM_DTTM, '%Y.%m.%d %H:%i:%s') ICM_DTTM
+			, S.DELIVER_TIME
+			, IFNULL(U.NATION, '82') NATION
+			, CAST(AES_DECRYPT(IFNULL(U.USR_TEL, R.RSV_TEL), SHA2(#{encKey},512)) AS CHAR) USR_TEL
+			, CAST(AES_DECRYPT(IFNULL(U.USR_EMAIL, R.RSV_EMAIL), SHA2(#{encKey},512)) AS CHAR) USR_EMAIL
+			, S.STORE_TEL ADMIN_TEL
+			, UN.UNIT_NM
+		FROM RSV R
+		INNER JOIN STORE S ON R.STORE_ID = S.STORE_ID
+		INNER JOIN UNIT UN ON R.UNIT = UN.UNIT_CD
+		LEFT OUTER JOIN USER U ON R.USR_ID = U.USR_ID
+		LEFT OUTER JOIN ADMIN A ON R.ADMIN_KEY = A.ADMIN_KEY
+		WHERE R.USR_ID = #{usrId}
+			AND R.RSV_ST = 'F'
+	</select>
+	
+	<!-- 센터 예약건 원복 -->
+	<update id="updateCenterBack">
+	/* updateCenterBack */
+		UPDATE RSV R, RSV_GROUP RG, RSV_GROUP_LOG RL
+			SET RL.GRP_ST = 'Y'
+		WHERE R.RSV_ID = #{value}
+			AND R.RSV_DT = RG.RSV_DT
+			AND R.STORE_ID = RG.STORE_ID
+			AND RG.GROUP_ID = RL.GROUP_ID
+			AND R.RSV_ID = RL.RSV_ID
+			AND RL.GRP_ST = 'C'
+	</update>
+	
+	<!-- 취소, 변경된 예약건 -->
+	<select id="selectRsvCancelGroup" resultType="map">
+	/* selectRsvCancelGroup */
+		SELECT
+			RGL.RSV_ID
+			, RGL.GRP_ST
+		FROM RSV_GROUP RG, RSV_GROUP_LOG RGL, RSV R
+		WHERE RG.STORE_ID = #{storeId}
+			AND RG.RSV_DT IN (#{oneday}, #{twoday})
+			AND RG.GROUP_TP = 'D'
+			AND RG.GROUP_ID = RGL.GROUP_ID
+			AND RGL.GRP_ST IN ('M', 'C')
+			AND RGL.RSV_ID = R.RSV_ID
+			AND R.RSV_O_DT = #{oneday}
+	</select>
+	
+	<!-- 미수령 예약건 -->
+	<select id="selectRsvNotGet" resultType="map">
+	/* selectRsvNotGet */
+		SELECT
+			RSV_ID
+			, 'N' GRP_ST
+		FROM RSV
+		WHERE STORE_ID = #{storeId}
+			AND RSV_ST = 'R'
+			AND RSV_DT = #{twoday}
+	</select>
+	
+	<!-- 그룹 회수 로그 생성 -->
+	<insert id="insertRsvRetGrpLogAD">
+		/* insertRsvRetGrpLogAD */
+		INSERT INTO RSV_GROUP_LOG(
+			GROUP_ID
+			, RSV_ID
+			, GRP_ST
+			, REG_DTTM
+		) VALUES
+		<foreach collection="retList" item="item" separator=" , ">
+            (#{groupId}, #{item.RSV_ID}, #{item.GRP_ST}, NOW())
+        </foreach>
+	</insert>
+	
+	<!-- 회수 리스트 등록 -->
+	<insert id="insertRsvRetLog">
+	/* insertRsvRetLog */
+		INSERT INTO RSV_RET_LOG(
+			RSV_ID
+			, STORE_ID
+			, RSV_ST
+			, REG_DTTM
+		)
+		SELECT
+			RSV_ID
+			, STORE_ID
+			, #{st}
+			, NOW()
+		FROM RSV
+		WHERE RSV_ID = #{rsvId}
+	</insert>
+	
+	<!-- 회수 리스트  -->
+	<select id="selectRsvRetLog" resultType="map">
+	/* selectRsvRetLog */
+		SELECT
+			RSV_ID
+			, RSV_ST GRP_ST
+		FROM RSV_RET_LOG
+		WHERE STORE_ID = #{storeId}
+			AND GRP_ST = 'N'
+	</select>
+	
+	<!-- 회수 리스트 업데이트 -->
+	<update id="updateRsvRetLog">
+		/* updateRsvRetLog */
+		UPDATE RSV_RET_LOG
+			SET GRP_ST = 'Y'
+		WHERE RSV_ID IN
+		<foreach collection="list" item="item" separator="," open="(" close=")">
+			#{item.RSV_ID}
+		</foreach>
+	</update>
+	
+	<!-- 회수 리스트 업데이트 -->
+	<delete id="updateRsvRetLogBack">
+		/* updateRsvRetLogBack */
+		DELETE FROM RSV_RET_LOG
+		WHERE RSV_ID = #{value}
+			AND RSV_ST = 'C'
+			AND GRP_ST = 'N'
+	</delete>
+	
+</mapper>

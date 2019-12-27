@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.i4unetworks.weys.pay.PayDao">
+
+	<!-- 멤버십 결제 내역 -->
+	<select id="selectPayList" resultType="payListVO">
+		/* selectPayList */
+		SELECT
+			PH.ID
+			, U.USR_NICK
+			, CAST(AES_DECRYPT(U.USR_EMAIL, SHA2(#{encKey},512)) AS CHAR) USR_EMAIL
+			, PH.PAY_AMNT
+			, PH.PAY_TEXT
+			, CASE WHEN PH.PAY_ST = 'R' THEN '대기' WHEN PH.PAY_ST = 'D' THEN '완료' WHEN PH.PAY_ST = 'CR' THEN '취소대기' ELSE '취소' END PAY_ST
+			, CASE WHEN PH.PAY_METHOD = 'vb' THEN '가상계좌' ELSE '카드' END PAY_METHOD
+			, DATE_FORMAT(CASE WHEN PAY_ST = 'C' THEN CANCEL_DONE_DTTM WHEN PAY_ST = 'CR' THEN CANCEL_DTTM ELSE REG_DTTM END, '%Y.%m.%d %H:%i') REG_DTTM
+			, CAST(AES_DECRYPT(PH.RBANK_NM, SHA2(#{encKey},512)) AS CHAR) RBANK_NM
+			, CAST(AES_DECRYPT(PH.RBANK_CD, SHA2(#{encKey},512)) AS CHAR) RBANK_CD
+			, CAST(AES_DECRYPT(PH.RBANK_HOLDER, SHA2(#{encKey},512)) AS CHAR) RBANK_HOLDER
+			, DATE_FORMAT(PH.CANCEL_DTTM, '%Y.%m.%d %H:%i') CANCEL_DTTM
+		FROM PAY_HIST PH, USER U
+		WHERE PH.USR_ID = U.USR_ID
+			AND CASE WHEN PAY_ST = 'C' THEN CANCEL_DONE_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+				WHEN PAY_ST = 'CR' THEN CANCEL_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+				ELSE REG_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59') END
+		<if test='searchType == "t"'>
+			AND (U.USR_NICK LIKE CONCAT('%',#{searchText},'%') OR U.USR_EMAIL = CAST(AES_DECRYPT(#{searchText}, SHA2(#{encKey},512)) AS CHAR))
+		</if>
+		<if test='searchType == "n"'>
+			AND U.USR_NICK LIKE CONCAT('%',#{searchText},'%')
+		</if>
+		<if test='searchType == "e"'>
+			AND U.USR_EMAIL = CAST(AES_DECRYPT(#{searchText}, SHA2(#{encKey},512)) AS CHAR) 
+		</if>
+		ORDER BY PH.ID DESC
+		LIMIT #{pageSize} OFFSET #{searchPage}
+	</select>
+
+	<!-- 멤버십 결제 내역 -->
+	<select id="selectPayListCnt" resultType="int">
+		/* selectPayListCnt */
+		SELECT
+			COUNT(PH.ID)
+		FROM PAY_HIST PH, USER U
+		WHERE PH.USR_ID = U.USR_ID
+			AND CASE WHEN PAY_ST = 'C' THEN CANCEL_DONE_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+				WHEN PAY_ST = 'CR' THEN CANCEL_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+				ELSE REG_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59') END
+		<if test='searchType == "t"'>
+			AND (U.USR_NICK LIKE CONCAT('%',#{searchText},'%') OR U.USR_EMAIL = CAST(AES_DECRYPT(#{searchText}, SHA2(#{encKey},512)) AS CHAR))
+		</if>
+		<if test='searchType == "n"'>
+			AND U.USR_NICK LIKE CONCAT('%',#{searchText},'%')
+		</if>
+		<if test='searchType == "e"'>
+			AND U.USR_EMAIL = CAST(AES_DECRYPT(#{searchText}, SHA2(#{encKey},512)) AS CHAR) 
+		</if>
+	</select>
+	
+	<!-- 취소 가능한지 확인 -->
+	<select id="cancelCheck" resultType="string">
+		/* cancelCheck */
+		SELECT
+			CASE WHEN PI.PAY_LIMIT &gt; M.COST THEN 'F' ELSE 'T' END FLAG
+		FROM PAY_HIST PH, PAY_INFO PI, MEMBER M
+		WHERE PH.ID = #{value}
+			AND PH.PAY_ID = PI.PAY_ID
+			AND PH.USR_ID = M.USR_ID
+	</select>
+
+	<!-- 취소 정보 입력 -->
+	<update id="updateMemberCancel">
+		/* updateMemberCancel */
+		UPDATE PAY_HIST PH, PAY_INFO PI, MEMBER M
+			SET M.COST = M.COST - PI.PAY_LIMIT
+				, PH.RBANK_NM = AES_ENCRYPT(#{bankNm}, SHA2(#{encKey},512))
+				, PH.RBANK_CD = AES_ENCRYPT(#{bankCd}, SHA2(#{encKey},512))
+				, PH.RBANK_HOLDER = AES_ENCRYPT(#{bankHolder}, SHA2(#{encKey},512))
+				, PH.PAY_ST = 'CR'
+				, PH.CANCEL_DTTM = NOW()
+		WHERE PH.ID = #{id}
+			AND PH.PAY_ID = PI.PAY_ID
+			AND PH.USR_ID = M.USR_ID
+	</update>
+	
+	<!-- 환불 완료 -->
+	<update id="updateReturnComplete">
+		/* updateReturnComplete */
+		UPDATE PAY_HIST PH
+			SET PH.PAY_ST = 'C'
+				, PH.CANCEL_DONE_DTTM = NOW()
+				, PH.MOD_DTTM = NOW()
+		WHERE PH.ID = #{id}
+	</update>
+	
+	<!-- 환불에 따른 결제 내역 변경 -->
+	<update id="updateMemberActiveCancel">
+		/* updateMemberActiveCancel */
+		UPDATE MEMBER_ACTIVE MA,(
+			SELECT
+				MAX(MA.ACTIVE_ID) ACTIVE_ID
+			FROM PAY_HIST PH, MEMBER M, MEMBER_ACTIVE MA
+			WHERE PH.ID = #{id}
+				AND PH.USR_ID = M.USR_ID
+				AND M.MEMBER_ID = MA.MEMBER_ID
+				AND MA.TP IN ('N', 'R')) M
+			SET MA.TP = 'VC'
+				, MA.REG_DTTM = NOW()
+		WHERE MA.ACTIVE_ID = M.ACTIVE_ID
+	</update>
+	
+	<!-- 환불 완료에 따른 SMS 정보 -->
+	<select id="selectSmsInfo" resultType="map">
+		/* selectSmsInfo */
+		SELECT
+			PH.PAY_AMNT
+			, CAST(AES_DECRYPT(U.USR_TEL, SHA2(#{encKey},512)) AS CHAR) USR_TEL
+			, U.NATION
+		FROM PAY_HIST PH, USER U
+		WHERE PH.ID = #{id}
+			AND PH.USR_ID = U.USR_ID
+	</select>
+	
+</mapper>

@@ -1,0 +1,309 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.i4unetworks.weys.main.MainDao">
+	
+	<!-- 누적 가입자 정보  -->
+	<select id="selectTotalUser" resultType="int">
+	/* selectTotalUser */
+		SELECT
+			COUNT(USR_ID)
+		FROM USER
+		WHERE 1=1
+		<if test='value != null'>
+			AND USR_REG_DTTM BETWEEN #{value} AND CONCAT(#{value}, ' 23:59:59')
+		</if>
+	</select>
+
+	<!-- 누적 게시글 정보  -->
+	<select id="selectTotalTrade" resultType="int">
+	/* selectTotalTrade */
+		SELECT
+			COUNT(TRADE_ID)
+		FROM TRADE
+		WHERE 1=1
+		<if test='value != null'>
+			AND TRADE_REG_DTTM BETWEEN #{value} AND CONCAT(#{value}, ' 23:59:59')
+		</if>
+	</select>
+
+	<!-- 누적 거래양 금액   -->
+	<select id="selectTotalCost" resultType="long">
+	/* selectTotalCost */
+		SELECT
+			IFNULL(SUM(TRADE_COST), 0)
+		FROM TRADE_COST
+		WHERE 1=1
+		<if test='value != null'>
+			AND REG_DTTM BETWEEN #{value} AND CONCAT(#{value}, ' 23:59:59')
+		</if>
+	</select>
+
+	<!-- 멤버십 가입자   -->
+	<select id="selectMemberShip" resultType="int">
+	/* selectMemberShip */
+		SELECT
+			IFNULL(COUNT(MEMBER_ID), 0)
+		FROM MEMBER
+		WHERE 1=1
+		<if test='value != null'>
+			AND START_DT BETWEEN #{value} AND CONCAT(#{value}, ' 23:59:59')
+		</if>
+	</select>
+	
+	<!-- 누적 멤버십 금액   -->
+	<select id="selectMemberShipPay" resultType="long">
+	/* selectMemberShipPay */
+		SELECT
+			IFNULL(SUM(PAY_AMNT), 0)
+		FROM PAY_HIST
+		WHERE PAY_ST = 'D'
+		<if test='value != null'>
+			AND REG_DTTM BETWEEN #{value} AND CONCAT(#{value}, ' 23:59:59')
+		</if>
+	</select>
+	
+	<!-- 포인트 환전자 수   -->
+	<select id="selectPointChangeUser" resultType="long">
+	/* selectPointChangeUser */
+		SELECT
+			IFNULL(COUNT(USR_ID), 0)
+		FROM POINT
+	</select>
+	
+	<!-- 포인트 환전자 수   -->
+	<select id="selectPointChange" resultType="long">
+	/* selectPointChange */
+		SELECT
+			IFNULL(SUM(POINT), 0)
+		FROM POINT
+		WHERE POINT_TP = #{tp}
+		<if test='date != null'>
+			AND REG_DTTM BETWEEN #{date} AND CONCAT(#{date}, ' 23:59:59')
+		</if>
+	</select>
+	
+	<!-- 예약 완료 건수 -->
+	<select id="selectTotalRsv" resultType="int">
+	/* selectTotalRsv */
+		SELECT
+			IFNULL(COUNT(RSV_ID), 0)
+		FROM RSV
+		WHERE RSV_ST = 'F'
+	</select>
+	
+	<!-- 오늘 예약 접수 건수 -->
+	<select id="selectTodayRsv" resultType="int">
+	/* selectTodayRsv */
+		SELECT
+			IFNULL(COUNT(RSV_ID), 0)
+		FROM RSV
+		WHERE RSV_ST IN ('I', 'R')
+			AND REG_DTTM BETWEEN #{value} AND CONCAT(#{value}, ' 23:59:59')
+	</select>
+	
+	<!-- 오늘 예약 거래 건수-->
+	<select id="selectTodayRsvDone" resultType="int">
+	/* selectTodayRsvDone */
+		SELECT
+			IFNULL(COUNT(RSV_ID), 0)
+		FROM RSV
+		WHERE RSV_ST IN ('I', 'R')
+			AND RSV_DT = #{value}
+	</select>
+	
+	<!-- 내일 부터 필요한 외화-->
+	<select id="selectReadyUnit" resultType="map">
+	/* selectReadyUnit */
+		SELECT
+			R.UNIT
+			, SUM(R.RSV_AMNT) RSV_AMNT
+			, COUNT(R.RSV_ID) R_CNT
+			, S.STORE_NM
+			, IFNULL(T.R_CNT, 0) T_CNT
+			, IFNULL(T.RSV_AMNT, 0) T_AMNT
+		FROM RSV R
+		INNER JOIN STORE S ON R.STORE_ID = S.STORE_ID
+		LEFT OUTER JOIN (
+			SELECT
+				R.UNIT
+				, SUM(R.RSV_AMNT) RSV_AMNT
+				, COUNT(R.RSV_ID) R_CNT
+				, S.STORE_NM
+			FROM RSV R, STORE S
+			WHERE R.RSV_ST = 'R'
+				AND R.RSV_DT = #{tomor}
+				AND R.STORE_ID = S.STORE_ID
+			GROUP BY R.UNIT, R.STORE_ID
+			) T ON R.UNIT = T.UNIT AND S.STORE_NM = T.STORE_NM
+		WHERE R.RSV_ST = 'R'
+			AND R.RSV_DT &gt; #{tday}
+		GROUP BY R.UNIT, R.STORE_ID
+		ORDER BY R.STORE_ID
+	</select>
+	
+	<!-- 오늘 예약 거래 건수-->
+	<select id="selectTodayRsvAll" resultType="int">
+	/* selectTodayRsvAll */
+		SELECT
+			IFNULL(COUNT(RSV_ID), 0)
+		FROM RSV
+		WHERE RSV_ST IN ('F', 'R')
+			AND RSV_DT = #{value}
+	</select>
+	
+	<!-- 예약가능 외화 -->
+	<select id="selectRsvUnit" resultType="map">
+	/* selectRsvUnit */
+		SELECT
+			R.UNIT
+			, G.TOTAL_AMNT
+		FROM RSV R
+		INNER JOIN (SELECT
+			UNIT
+			, SUM(PAPER * AMNT) TOTAL_AMNT
+		FROM GOLD_INFO
+		WHERE STORE_ID = 5
+		GROUP BY UNIT, STORE_ID) G ON R.UNIT = G.UNIT
+		WHERE R.RSV_DT &gt; #{value}
+			AND R.RSV_ST = 'R'
+		GROUP BY R.UNIT
+	</select>
+	
+	<!-- 예약일 리스트 -->
+	<select id="selectRsvList" resultType="map">
+	/* selectRsvList */
+		SELECT
+			SUM(IFNULL(R.RSV_AMNT, 0)) RSV_AMNT
+			, IFNULL(COUNT(R.RSV_ID), 0) R_CNT
+			, DATE_FORMAT(A.RSV_DT, '%m.%d') RSV_DT
+		FROM (SELECT
+			DATE_FORMAT(RSV_DT, '%Y.%m.%d') RSV_DT
+		FROM RSV
+		WHERE RSV_DT &gt; #{dt}
+			AND RSV_ST = 'R'
+		GROUP BY RSV_DT) A
+		LEFT OUTER JOIN RSV R ON A.RSV_DT = R.RSV_DT AND R.RSV_ST = 'R' AND R.UNIT = #{UNIT}
+		GROUP BY A.RSV_DT
+	</select>
+	
+	<!-- 예약일 리스트 -->
+	<select id="selectRsvDt" resultType="string">
+	/* selectRsvDt */
+		SELECT
+			CONCAT(DATE_FORMAT(RSV_DT, '%m.%d')
+			, CASE DAYOFWEEK(RSV_DT) WHEN '1' THEN ' 일' WHEN '2' THEN ' 월' WHEN '3' THEN ' 화' WHEN '4' THEN ' 수' WHEN '5' THEN ' 목' WHEN '6' THEN ' 금' WHEN '7' THEN ' 토' END) RSV_DT
+		FROM RSV
+		WHERE RSV_DT &gt; #{value}
+			AND RSV_ST = 'R'
+		GROUP BY RSV_DT
+	</select>
+	
+	<!-- 설문조사 --> 
+	<select id="selectSurveyHist" resultType="map">
+	/* selectSurveyHist */
+		SELECT
+			S.RSV_NO
+			, S.FIRST_A
+			, S.SECOND_A
+			, S.THIRD_A
+			, S.FOURTH_A
+			, S.FIFTH_A
+			, S.MEMO
+			, DATE_FORMAT(R.MOD_DTTM, '%Y.%m.%d %H:%i:%s') MOD_DTTM
+		FROM SURVEY_HIST S, RSV R
+		WHERE S.RSV_NO = R.RSV_NO
+		ORDER BY SH_ID DESC
+		LIMIT #{pageSize} OFFSET #{searchPage}
+	</select>
+	
+	<!-- 설문조사 --> 
+	<select id="selectSurveyHistCnt" resultType="int">
+	/* selectSurveyHistCnt */
+		SELECT
+			COUNT(SH_ID)
+		FROM SURVEY_HIST
+	</select>
+	
+	<!-- 지점 리스트 --> 
+	<select id="selectStoreList" resultType="map">
+	/* selectStoreList */
+		SELECT
+			R.STORE_ID
+			, S.STORE_NM
+		FROM RSV R, STORE S
+		WHERE R.RSV_ST = 'R'
+			AND R.RSV_DT &gt;= #{value}
+			AND R.STORE_ID = S.STORE_ID
+		GROUP BY R.STORE_ID
+	</select>
+	
+	<!-- 날짜 리스트 --> 
+	<select id="selectDateList" resultType="string">
+	/* selectDateList */
+		SELECT
+			RSV_DT
+		FROM RSV
+		WHERE RSV_ST = 'R'
+			AND RSV_DT &gt;= #{value}
+		GROUP BY RSV_DT
+	</select>
+	
+	<!-- 지점별 예약 수 --> 
+	<select id="selectReadyStore" resultType="map">
+	/* selectReadyStore */
+		SELECT
+			#{startDt} RSV_DT
+			, IFNULL((SELECT
+					COUNT(RSV_ID) CNT
+				FROM RSV
+				WHERE RSV_ST = 'R'
+					AND STORE_ID = #{STORE_ID}
+					AND ((RSV_DT = #{startDt} AND RSV_TM &gt; #{rsvTm}) OR (RSV_DT = #{endDt} AND RSV_TM &lt; #{rsvTm}))
+				), 0) CNT
+			, IFNULL((SELECT
+					COUNT(RSV_ID) CNT
+				FROM RSV
+				WHERE RSV_ST = 'F'
+					AND STORE_ID = #{STORE_ID}
+					AND ((RSV_DT = #{startDt} AND RSV_TM &gt; #{rsvTm}) OR (RSV_DT = #{endDt} AND RSV_TM &lt; #{rsvTm}))
+				), 0) F_CNT
+	</select>
+	
+	<!-- 외화 비교 --> 
+	<select id="selectRateList" resultType="map">
+	/* selectRateList */
+		SELECT
+			E.UNIT
+			, E.BASIC_RATE
+			, M.RATE
+		FROM EXCHANGE_RATE E
+		INNER JOIN (
+			SELECT
+				A.UNIT
+				, SUM(A.BUY_AMNT) BUY_AMNT
+				, SUM(A.BUY_KOR) BUY_KOR
+				, (SUM(A.BUY_KOR) / SUM(A.BUY_AMNT) * CASE WHEN A.UNIT = 'JPY' THEN 100 ELSE 1 END) RATE
+			FROM (
+				SELECT
+					(BUY_AMNT - SELL_AMNT) BUY_AMNT
+					, (BUY_KOR - SELL_KOR) BUY_KOR
+					, UNIT
+				FROM MONEY_MNG
+				WHERE BUY_AMNT != SELL_AMNT) A
+				GROUP BY A.UNIT
+			) M ON E.UNIT = M.UNIT
+		WHERE E.DTTM = (SELECT MAX(DTTM) FROM EXCHANGE_RATE)
+			AND E.UNIT IN (SELECT UNIT_CD FROM UNIT WHERE RSV_ST = 'Y')
+	</select>
+	
+	<!-- 2시간 지난 예약건 --> 
+	<select id="selectRemainRsv" resultType="int">
+	/* selectRemainRsv */
+		SELECT
+			COUNT(RSV_ID)
+		FROM RSV
+		WHERE RSV_ST = 'R'
+			AND #{value} &gt; CONCAT(RSV_DT, ' ', RSV_TM)
+	</select>
+	
+</mapper>

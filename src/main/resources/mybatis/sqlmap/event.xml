@@ -1,0 +1,269 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.i4unetworks.weys.event.EventDao">
+
+	<!-- 이벤트 목록 리스트 -->
+	<select id="getEventList" resultType="eventVO">
+		/* getEventList */
+		SELECT
+			E.EVENT_ID
+			, E.EVENT_TITLE
+			, CASE WHEN E.EVENT_ST='N' THEN '종료' WHEN E.END_DT &lt; DATE_FORMAT(NOW(), '%Y.%m.%d') THEN '마감' ELSE '진행중' END EVENT_ST
+			, DATE_FORMAT(E.START_DT, '%Y.%m.%d') START_DT
+			, DATE_FORMAT(E.END_DT, '%Y.%m.%d') END_DT
+			, DATE_FORMAT(E.REG_DTTM, '%Y.%m.%d') REG_DTTM
+			, IFNULL(EU.ECNT, 0) ECNT
+		FROM EVENT E
+		LEFT OUTER JOIN (SELECT
+			COUNT(USR_ID) ECNT
+			, EVENT_ID
+		FROM EVENT_USER
+		GROUP BY EVENT_ID) EU ON E.EVENT_ID = EU.EVENT_ID
+		WHERE #{startDt} BETWEEN E.START_DT AND CONCAT(E.END_DT, ' 23:59:59')
+			OR #{endDt} BETWEEN E.START_DT AND CONCAT(E.END_DT, ' 23:59:59')
+		ORDER BY E.EVENT_ST DESC, E.END_DT DESC
+		LIMIT #{pageSize} OFFSET #{searchPage}
+	</select>
+
+	<!-- 이벤트 전체 수  -->
+	<select id="getEventListCnt" resultType="int">
+		/* getEventListCnt */
+		SELECT
+			COUNT(EVENT_ID)
+		FROM EVENT
+		WHERE #{startDt} BETWEEN START_DT AND CONCAT(END_DT, ' 23:59:59')
+			OR #{endDt} BETWEEN START_DT AND CONCAT(END_DT, ' 23:59:59')
+	</select>
+	
+	<!-- 이벤트 등록 -->
+	<insert id="insertEvent">
+		/* insertEvent */
+		INSERT INTO EVENT (
+			EVENT_TITLE
+			, EVENT_DESC
+			, EVENT_IMG
+			, EVENT_BNR
+			, COUPON_ID
+			, EVENT_LIMIT
+			, EVENT_TP
+			, EVENT_ST
+			, START_DT
+			, END_DT
+			, EVENT_TXT
+			, BTN_PST
+			, MEMBER_POINT
+			, MEMBER_PERIOD
+			, REG_DTTM
+		) VALUES (
+			#{eventTitle}
+			, #{eventDesc}
+			, #{eventImg}
+			, #{eventBnr}
+			, #{couponId}
+			, #{eventLimit}
+			, #{eventTp}
+			, #{eventSt}
+			, #{startDt}
+			, #{endDt}
+			, #{eventTxt}
+			, #{btnPst}
+			, #{memberPoint}
+			, #{memberPeriod}
+			, NOW()
+		)
+	</insert>
+	
+	<!-- 이벤트 수정 -->
+	<update id="updateEvent">
+		/* updateEvent */
+		UPDATE EVENT
+			SET EVENT_TITLE = #{eventTitle}
+				, EVENT_DESC = #{eventDesc}
+				, EVENT_IMG = #{eventImg}
+				, EVENT_BNR = #{eventBnr}
+				, COUPON_ID = #{couponId}
+				, EVENT_LIMIT = #{eventLimit}
+				, EVENT_TP = #{eventTp}
+				, EVENT_ST = #{eventSt}
+				, START_DT = #{startDt}
+				, END_DT = #{endDt}
+				, EVENT_TXT = #{eventTxt}
+				, BTN_PST = #{btnPst}
+				, MEMBER_POINT = #{memberPoint}
+				, MEMBER_PERIOD = #{memberPeriod}
+		WHERE EVENT_ID = #{eventId}
+	</update>
+	
+	<!-- 이벤트 상세보기 -->
+	<select id="selectEventInfo" resultType="eventVO">
+		/* selectEventInfo */
+		SELECT
+			EVENT_ID
+			, EVENT_TITLE
+			, EVENT_DESC
+			, EVENT_IMG
+			, EVENT_BNR
+			, COUPON_ID
+			, MEMBER_POINT
+			, MEMBER_PERIOD
+			, START_DT
+			, END_DT
+			, EVENT_TP
+			, EVENT_ST
+			, EVENT_LIMIT
+			, EVENT_TXT
+			, BTN_PST
+		FROM EVENT
+		WHERE EVENT_ID = #{value}
+	</select>
+
+	<!-- 배송 쿠폰 보기 -->
+	<select id="selectEventCoupList" resultType="couponVO">
+		/* selectEventCoupList */
+		SELECT
+			COUPON_ID
+			, COUPON_NM
+		FROM COUPON_INFO
+		WHERE SEND_TP = 'I'
+			AND COUPON_TP IN ('D', 'DD', 'DR', 'P', 'C')
+			AND COUPON_CODE = ''
+			AND END_DT &gt; NOW()
+		ORDER BY COUPON_ID DESC
+	</select>
+
+	<!-- 이벤트 내용 -->
+	<select id="selectEventTitle" resultType="string">
+		/* selectEventTitle */
+		SELECT
+			EVENT_TITLE
+		FROM EVENT
+		WHERE EVENT_ID = #{value}
+	</select>
+	
+	<!-- 이벤트 내용 보낼 푸시 -->
+	<select id="selectNotJoinEvent" resultType="string">
+		/* selectNotJoinEvent */
+		SELECT
+			UT.UUID
+		FROM USER U, USER_TOKEN UT
+		WHERE U.USR_ST = 'Y'
+			AND U.AGREE = 'Y'
+			AND U.USR_ID NOT IN (SELECT USR_ID FROM EVENT_USER WHERE EVENT_ID = #{eventId})
+			AND U.USR_ID = UT.USR_ID
+			AND UT.OS = #{os}
+			AND UT.UUID != ''
+	</select>
+	
+	<!-- 알람 입력 -->
+	<insert id="insertNotJoinEvent">
+		/* insertNotJoinEvent */
+		INSERT INTO ALARM(
+			USR_ID
+			, ARM_TP
+			, ARM_ST
+			, ARM_TITLE
+			, ARM_TARGET
+			, ARM_VAL
+			, REG_DTTM
+		)
+		SELECT
+			USR_ID
+			, #{armTp}
+			, 'N'
+			, #{armTitle}
+			, #{armTarget}
+			, #{armVal}
+			, NOW()
+		FROM USER
+		WHERE USR_ST = 'Y'
+			AND USR_ID NOT IN (SELECT USR_ID FROM EVENT_USER WHERE EVENT_ID = #{eventId})
+	</insert>
+
+	<!-- 참여 이벤트 리스트 -->
+	<select id="getEventJoinList" resultType="map">
+		/* getEventJoinList */
+		SELECT
+			E.USR_ID
+			, E.EVENT_ID
+			, E.JOIN_ID
+			, C.CNT
+			, CASE WHEN U.FORIGN = 'Y' THEN CONCAT(CAST(AES_DECRYPT(U.GIV_NM, SHA2(#{encKey},512)) AS CHAR), ' ', CAST(AES_DECRYPT(U.SUR_NM, SHA2(#{encKey},512)) AS CHAR))
+						ELSE CAST(AES_DECRYPT(U.USR_NM, SHA2(#{encKey},512)) AS CHAR) END USR_NM
+			, E.EVENT_VAL
+			, E.CHK_ST
+			, IFNULL(K.CHK_CNT, 0) CHK_CNT
+			, DATE_FORMAT(E.REG_DTTM, '%Y.%m.%d') REG_DTTM
+			, DATE_FORMAT(E.CHK_DTTM, '%Y.%m.%d') CHK_DTTM
+		FROM EVENT_JOIN E
+		INNER JOIN (
+			SELECT
+				USR_ID
+				, COUNT(USR_ID) CNT
+			FROM EVENT_JOIN
+			WHERE REG_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+			GROUP BY USR_ID
+		) C ON E.USR_ID = C.USR_ID
+		LEFT OUTER JOIN (
+			SELECT
+				USR_ID
+				, COUNT(USR_ID) CHK_CNT
+			FROM EVENT_JOIN
+			WHERE CHK_ST = 'Y'
+			GROUP BY USR_ID
+		) K ON E.USR_ID = K.USR_ID
+		LEFT OUTER JOIN USER U ON E.USR_ID = U.USR_ID
+		WHERE E.REG_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+		ORDER BY E.REG_DTTM DESC
+		LIMIT #{pageSize} OFFSET #{searchPage}
+	</select>
+	
+	<!-- 참여 이벤트 리스트 -->
+	<select id="getEventJoinListCnt" resultType="int">
+		/* getEventJoinListCnt */
+		SELECT
+			COUNT(USR_ID)
+		FROM EVENT_JOIN
+		WHERE REG_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+	</select>
+	
+	<!-- 참여 이벤트 쿠폰 발급 -->
+	<insert id="insertEventJoinCoupon">
+		/* getEventJoinListCnt */
+		INSERT INTO COUPON_HIST(
+			COUPON_ID
+			, USR_ID
+			, DUE_DT
+			, REG_DTTM
+			, USE_ST
+		)	
+		SELECT
+			C.COUPON_ID
+			, #{usrId}
+			, CONCAT(#{due}, ' 23:59:59')
+			, NOW()
+			, 'Y'
+		FROM EVENT E, COUPON_INFO C
+		WHERE E.EVENT_TXT = C.COUPON_CODE
+			AND E.EVENT_ID = #{eventId}
+	</insert>
+	
+	<!-- 참여 이벤트 푸시 보내기 -->
+	<select id="selectUsrPushInfo" resultType="map">
+		/* selectUsrPushInfo */
+		SELECT
+			UUID
+			, OS
+		FROM USER_TOKEN
+		WHERE USR_ID = #{usrId}
+	</select>
+	
+	<!-- 참여 이벤트 완료 업데이트 -->
+	<update id="updateEventJoined">
+		/* updateEventJoined */
+		UPDATE EVENT_JOIN
+			SET CHK_ST = 'Y'
+				, CHK_DTTM = NOW()
+		WHERE JOIN_ID = #{joinId}
+	</update>
+	
+</mapper>

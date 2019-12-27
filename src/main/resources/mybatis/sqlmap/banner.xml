@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.i4unetworks.weys.banner.BannerDao">
+
+	<!-- 배너 목록 리스트 -->
+	<select id="selectBannerList" resultType="bannerVO">
+		/* selectBannerList */
+		SELECT
+			BANNER_ID
+			, BANNER_NM
+			, BANNER_URL
+			, DATE_FORMAT(START_DT, '%Y.%m.%d') START_DT
+			, DATE_FORMAT(END_DT, '%Y.%m.%d') END_DT
+			, DATE_FORMAT(REG_DTTM, '%Y.%m.%d') REG_DTTM
+			, REDIRECT_URL
+			, REDIRECT_APP
+		FROM BANNER
+		ORDER BY BANNER_ID DESC
+		LIMIT #{pageSize} OFFSET #{searchPage}
+	</select>
+
+	<!-- 배너 전체 수  -->
+	<select id="selectBanneristCnt" resultType="int">
+		/* selectBanneristCnt */
+		SELECT
+			COUNT(BANNER_ID)
+		FROM BANNER
+	</select>
+	
+	<!-- 예약 배너 목록 리스트 -->
+	<select id="selectRsvBannerList" resultType="bannerVO">
+		/* selectRsvBannerList */
+		SELECT
+			BNR_ID
+			, BNR_TP
+			, BNR_CONT
+			, CASE WHEN BNR_ST='Y' THEN '진행중' WHEN BNR_ST='O' THEN '임시' ELSE '종료' END BNR_ST
+			, DATE_FORMAT(START_DT, '%Y.%m.%d') START_DT
+			, DATE_FORMAT(END_DT, '%Y.%m.%d') END_DT
+			, DATE_FORMAT(REG_DTTM, '%Y.%m.%d') REG_DTTM
+			, REDIRECT_URL
+			, REDIRECT_APP
+		FROM RSV_BANNER
+		ORDER BY BNR_ID DESC
+		LIMIT #{pageSize} OFFSET #{searchPage}
+	</select>
+	
+	<!-- 예약 배너 전체 수  -->
+	<select id="selectRsvBanneristCnt" resultType="int">
+		/* selectRsvBanneristCnt */
+		SELECT
+			COUNT(BNR_ID)
+		FROM RSV_BANNER
+	</select>
+	
+	<!-- 배너 상세  -->
+	<select id="selectBannerInfo" resultType="bannerVO">
+		/* selectBannerInfo */
+		SELECT
+			BANNER_ID
+			, BANNER_NM
+			, BANNER_URL
+			, REDIRECT_URL
+			, REDIRECT_APP
+			, CASE WHEN REDIRECT_URL IS NULL THEN 'A' ELSE 'U' END REDIRECT_TYPE
+			, IFNULL(DATE_FORMAT(START_DT, '%Y.%m.%d'), '') START_DT
+			, IFNULL(DATE_FORMAT(END_DT, '%Y.%m.%d'), '') END_DT
+		FROM BANNER
+		WHERE BANNER_ID = #{value}
+	</select>
+
+	<!-- 배너 상세  -->
+	<select id="selectRsvBannerInfo" resultType="bannerVO">
+		/* selectRsvBannerInfo */
+		SELECT
+			BNR_ID
+			, BNR_TP
+			, BNR_CONT
+			, REDIRECT_URL
+			, REDIRECT_APP
+			, BNR_ST
+			, CASE WHEN REDIRECT_URL IS NULL THEN 'A' ELSE 'U' END REDIRECT_TYPE
+			, IFNULL(DATE_FORMAT(START_DT, '%Y.%m.%d'), '') START_DT
+			, IFNULL(DATE_FORMAT(END_DT, '%Y.%m.%d'), '') END_DT
+		FROM RSV_BANNER
+		WHERE BNR_ID = #{value}
+	</select>
+
+	<!-- 배너 등록  -->
+	<insert id="insertBanner" useGeneratedKeys="true" keyProperty="bannerId">
+		/* insertBanner */
+		INSERT INTO BANNER(
+			BANNER_NM
+			, BANNER_URL
+			, START_DT
+			, END_DT
+			<if test='redirectType == "U"'>
+			, REDIRECT_URL
+			</if>
+			<if test='redirectType == "A"'>
+			, REDIRECT_APP
+			, TARGET
+			</if>
+			, REG_DTTM
+		) VALUES (
+			#{bannerNm}
+			, #{bannerUrl}
+			, #{startDt}
+			, #{endDt}
+			<if test='redirectType == "U"'>
+			, #{redirectUrl}
+			</if>
+			<if test='redirectType == "A"'>
+			, #{redirectApp}
+			, #{target}
+			</if>
+			, NOW()
+		)
+	</insert>
+
+	<!-- 배너 등록  -->
+	<insert id="insertRsvBanner" useGeneratedKeys="true" keyProperty="bnrId">
+		/* insertRsvBanner */
+		INSERT INTO RSV_BANNER(
+			BNR_TP
+			, BNR_CONT
+			, START_DT
+			, END_DT
+			<if test='redirectType == "U"'>
+			, REDIRECT_URL
+			</if>
+			<if test='redirectType == "A"'>
+			, REDIRECT_APP
+			, TARGET
+			</if>
+			, BNR_ST
+			, REG_DTTM
+		) VALUES (
+			#{bnrTp}
+			, #{bnrCont}
+			, #{startDt}
+			, #{endDt}
+			<if test='redirectType == "U"'>
+			, #{redirectUrl}
+			</if>
+			<if test='redirectType == "A"'>
+			, #{redirectApp}
+			, #{target}
+			</if>
+			, #{bnrSt}
+			, NOW()
+		)
+	</insert>
+	
+	<!-- 배너 수정  -->
+	<update id="updateBanner">
+		/* updateBanner */
+		UPDATE BANNER
+			SET BANNER_NM = #{bannerNm}
+			, BANNER_URL = #{bannerUrl}
+			, START_DT = #{startDt}
+			, END_DT = #{endDt}
+			<if test='redirectType == "U"'>
+			, REDIRECT_URL = #{redirectUrl}
+			, REDIRECT_APP = null
+			</if>
+			<if test='redirectType == "A"'>
+			, REDIRECT_URL = null
+			, REDIRECT_APP = #{redirectApp}
+			</if>
+		WHERE BANNER_ID = #{bannerId}
+	</update>
+	
+	<!-- 배너 수정  -->
+	<update id="updateRsvBanner">
+		/* updateRsvBanner */
+		UPDATE RSV_BANNER
+			SET BNR_TP = #{bnrTp}
+			, BNR_CONT = #{bnrCont}
+			, START_DT = #{startDt}
+			, END_DT = #{endDt}
+			, BNR_ST = #{bnrSt}
+			<if test='redirectType == "U"'>
+			, REDIRECT_URL = #{redirectUrl}
+			, REDIRECT_APP = null
+			</if>
+			<if test='redirectType == "A"'>
+			, REDIRECT_URL = null
+			, REDIRECT_APP = #{redirectApp}
+			</if>
+		WHERE BNR_ID = #{bnrId}
+	</update>
+	
+	<!-- 배너 삭제  -->
+	<delete id="deleteBanner">
+		/* deleteBanner */
+		DELETE FROM BANNER
+		WHERE BANNER_ID = #{value}
+	</delete>
+
+	<!-- 배너 삭제  -->
+	<delete id="deleteRsvBanner">
+		/* deleteRsvBanner */
+		DELETE FROM RSV_BANNER
+		WHERE BNR_ID = #{value}
+	</delete>
+	
+	<!-- 이벤트 리스트 -->
+	<select id="selectEventList" resultType="map">
+		/* selectEventList */
+		SELECT
+			EVENT_ID
+			, EVENT_TITLE
+		FROM EVENT
+		WHERE EVENT_ST = 'Y'
+			AND END_DT &gt;= NOW()
+	</select>
+
+	<!-- 공지 리스트 -->
+	<select id="selectNoticeList" resultType="map">
+		/* selectNoticeList */
+		SELECT
+			NOTICE_ID
+			, NOTICE_TITLE
+		FROM NOTICE
+		WHERE NOTICE_ST = 'Y'
+	</select>
+
+	<!-- 컨텐츠 리스트 -->
+	<select id="selectContList" resultType="map">
+		/* selectContList */
+		SELECT
+			CL_TITLE
+			, CL_URL
+		FROM CONT_LIST
+		WHERE CL_LOGIN_CHK = 'N'
+			AND END_DT &gt; NOW()
+			AND START_DT &lt; NOW()
+	</select>
+	
+	<!-- 통화 리스트 -->
+	<select id="selectUnitList" resultType="map">
+		/* selectUnitList */
+		SELECT
+			UNIT_CD
+			, UNIT_NM
+		FROM UNIT
+		WHERE UNIT_ST = 'Y'
+			AND RSV_ST = 'Y'
+		ORDER BY UNIT_SEQ
+	</select>
+
+</mapper>

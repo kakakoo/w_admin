@@ -1,0 +1,439 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.i4unetworks.weys.coupon.CouponDao">
+
+	<!-- 쿠폰 목록 리스트 -->
+	<select id="selectCouponList" resultType="couponVO">
+		/* selectCouponList */
+		SELECT
+			C.COUPON_ID
+			, C.COUPON_NM
+			, C.COUPON_IMG
+			, DATE_FORMAT(C.START_DT, '%Y.%m.%d') START_DT
+			, DATE_FORMAT(C.END_DT, '%Y.%m.%d') END_DT
+			, DATE_FORMAT(C.REG_DTTM, '%Y.%m.%d %H:%i') REG_DTTM
+			, C.COUPON_ST
+			, IFNULL(UC.uCnt, 0) uCnt
+			, IFNULL(TC.tCnt, 0) tCnt
+		FROM COUPON_INFO C
+		LEFT OUTER JOIN (
+			SELECT
+				COUNT(COUPON_ID) uCnt
+				, COUPON_ID
+			FROM COUPON_HIST
+			WHERE USE_ST = 'D'
+			GROUP BY COUPON_ID
+		) UC ON C.COUPON_ID = UC.COUPON_ID
+		LEFT OUTER JOIN (
+			SELECT
+				COUNT(COUPON_ID) tCnt
+				, COUPON_ID
+			FROM COUPON_HIST
+			GROUP BY COUPON_ID
+		) TC ON C.COUPON_ID = TC.COUPON_ID
+		ORDER BY C.COUPON_ID DESC
+		LIMIT #{pageSize} OFFSET #{searchPage}
+	</select>
+	
+	<!-- 쿠폰 상세 -->
+	<select id="selectCouponInfo" resultType="couponVO">
+		/* selectCouponInfo */
+		SELECT
+			COUPON_ID
+			, COUPON_NM
+			, COUPON_DESC
+			, COUPON_STORE
+			, COUPON_IMG
+			, DATE_FORMAT(START_DT, '%Y.%m.%d') START_DT
+			, DATE_FORMAT(END_DT, '%Y.%m.%d') END_DT
+			, COUPON_TARGET
+			, COUPON_CNT
+			, PUSH_TYPE
+			, PUSH_DESC
+			, COUPON_BNR
+			, COUPON_DESC
+			, COUPON_TP
+			, SEND_TP
+			, COUPON_LIMIT
+			, MEMBER_COST
+			, MEMBER_PERIOD
+			, COUPON_CODE
+			, PERIOD_TP
+		FROM COUPON_INFO
+		WHERE COUPON_ID = #{value}
+	</select>
+
+	<!-- 쿠폰 전체 수  -->
+	<select id="selectCouponListCnt" resultType="int">
+		/* selectCouponListCnt */
+		SELECT
+			COUNT(COUPON_ID)
+		FROM COUPON_INFO
+	</select>
+	
+	<!-- 전체 사용자 수   -->
+	<select id="selectTargetAllCnt" resultType="int">
+		/* selectTargetAllCnt */
+		SELECT
+			COUNT(USR_ID)
+		FROM USER
+		WHERE USR_ST = 'Y'
+	</select>
+	
+	<!-- 전체 멤버십 사용자 수   -->
+	<select id="selectTargetMemberCnt" resultType="int">
+		/* selectTargetMemberCnt */
+		SELECT
+			COUNT(U.USR_ID)
+		FROM USER U, MEMBER M
+		WHERE U.USR_ID = M.USR_ID
+			AND U.USR_ST = 'Y'
+			AND M.END_DT &gt; NOW()
+	</select>
+	
+	<!-- 쿠폰 등록 -->
+	<insert id="insertCouponInfo"  useGeneratedKeys="true" keyProperty="couponId">
+		/* insertCouponInfo */
+		INSERT INTO COUPON_INFO(
+			COUPON_NM
+			, COUPON_DESC
+			, COUPON_STORE
+			, COUPON_IMG
+			, COUPON_TARGET
+			, COUPON_CNT
+			, PUSH_TYPE
+			, PUSH_DESC
+			, START_DT
+			, END_DT
+			, COUPON_ST
+			, REG_DTTM
+			, COUPON_BNR
+			, COUPON_TP
+			, SEND_TP
+			, COUPON_LIMIT
+			, MEMBER_COST
+			, MEMBER_PERIOD
+			, COUPON_CODE
+			, PERIOD_TP
+		) VALUES (
+			#{couponNm}
+			, #{couponDesc}
+			, #{couponStore}
+			, #{couponImg}
+			, #{couponTarget}
+			, #{couponCnt}
+			, #{pushType}
+			, #{pushDesc}
+			, #{startDt}
+			, CONCAT(#{endDt}, ' 23:59:59')
+			, 'R'
+			, NOW()	
+			, #{couponBnr}
+			, #{couponTp}
+			, #{sendTp}
+			, #{couponLimit}
+			, #{memberCost}
+			, #{memberPeriod}
+			, #{couponCode}	
+			, #{periodTp}	
+		)
+	</insert>
+	
+	<!-- 쿠폰 사용자 등록 -->
+	<insert id="insertCouponByExcel">
+		/* insertCouponByExcel */
+		INSERT INTO COUPON_HIST(
+			USR_ID
+			, COUPON_ID
+			, DUE_DT
+			, REG_DTTM
+			<if test='couponTp == "M"'>
+				, USE_DT
+				, USE_ST
+			</if>
+			<if test='couponTp == "D"'>
+				, USE_ST
+			</if>
+		) VALUES
+		<foreach collection="userList" item="item" separator=",">
+			( 
+			#{item}
+			, #{couponId}
+			, #{dueDt}
+			, NOW()
+			<if test='couponTp == "M"'>
+				, NOW()
+				, 'D'
+			</if>
+			<if test='couponTp == "D"'>
+				, 'Y'
+			</if>
+			)
+		</foreach>
+	</insert>
+	
+	<!-- 쿠폰 사용자 등록 -->
+	<insert id="insertCouponByAll">
+		/* insertCouponByAll */
+		INSERT INTO COUPON_HIST(
+			USR_ID
+			, COUPON_ID
+			, DUE_DT
+			, REG_DTTM
+			<if test='couponTp == "M"'>
+				, USE_DT
+				, USE_ST
+			</if>
+			<if test='couponTp == "D"'>
+				, USE_ST
+			</if>
+		) 
+		SELECT
+			USR_ID
+			, #{couponId}
+			, #{dueDt}
+			, NOW()
+			<if test='couponTp == "M"'>
+				, NOW()
+				, 'D'
+			</if>
+			<if test='couponTp == "D"'>
+				, 'Y'
+			</if>
+		FROM USER
+		WHERE USR_ST = 'Y'
+	</insert>
+	
+	<!-- 쿠폰 사용자 등록 -->
+	<insert id="insertCouponBarbageExcel">
+		/* insertCouponBarbageExcel */
+		INSERT INTO COUPON_HIST(
+			USR_ID
+			, COUPON_ID
+			, DUE_DT
+			, REG_DTTM
+			, USE_ST
+			, QR_CODE
+			, QR_IMG
+		) VALUES ( 
+			#{usrId}
+			, #{couponId}
+			, #{dueDt}
+			, NOW()
+			, 'Y'
+			, #{qrCode}
+			, #{qrImg}
+		)
+	</insert>
+	
+	<!-- 쿠폰 한도 추가 -->
+	<insert id="insertMACouponByExcel">
+		/* insertMACouponByExcel */
+		INSERT INTO MEMBER_ACTIVE(
+			MEMBER_ID
+			, TP
+			, PAPER
+			, ADD_COST
+			, USE_COST
+			, DUE_DTTM
+			, REG_DTTM
+		) 
+		SELECT
+			MEMBER_ID
+			, 'C'
+			, #{couponNm}
+			, #{memberCost}
+			, #{memberCost}
+			, #{dueDt}
+			, NOW()
+		FROM MEMBER
+		WHERE USR_ID IN
+		<foreach collection="userList" item="item" separator="," open="(" close=")">
+			#{item}
+		</foreach>
+	</insert>
+	
+	<!-- 쿠폰 한도 추가 -->
+	<insert id="insertMACouponByAll">
+		/* insertMACouponByAll */
+		INSERT INTO MEMBER_ACTIVE(
+			MEMBER_ID
+			, TP
+			, PAPER
+			, ADD_COST
+			, USE_COST
+			, DUE_DTTM
+			, REG_DTTM
+		) 
+		SELECT
+			M.MEMBER_ID
+			, 'C'
+			, #{couponNm}
+			, #{memberCost}
+			, #{memberCost}
+			, #{dueDt}
+			, NOW()
+		FROM USER U, MEMBER M
+		WHERE U.USR_ST = 'Y'
+			AND U.USR_ID = M.USR_ID
+	</insert>
+
+	<!-- 쿠폰 한도 업데이트 -->
+	<update id="updateMemCostByExcel">
+		/* updateMemCostByExcel */
+		UPDATE MEMBER M, (
+			SELECT
+				SUM(USE_COST) TOT
+				, MEMBER_ID
+			FROM MEMBER_ACTIVE
+			WHERE MEMBER_ID IN (
+			SELECT 
+				MEMBER_ID
+			FROM MEMBER WHERE USR_ID IN 
+				<foreach collection="userList" item="item" separator="," open="(" close=")">
+					#{item}
+				</foreach>
+			)
+			GROUP BY MEMBER_ID
+			) MA
+			SET M.COST = MA.TOT
+		WHERE MA.MEMBER_ID = M.MEMBER_ID
+	</update>
+	
+	<!-- 쿠폰 한도 업데이트 -->
+	<update id="updateMemCostByAll">
+		/* updateMemCostByAll */
+		UPDATE MEMBER M, (
+			SELECT
+				SUM(USE_COST) TOT
+				, MEMBER_ID
+			FROM MEMBER_ACTIVE
+			WHERE MEMBER_ID IN (
+				SELECT 
+					M.MEMBER_ID
+				FROM USER U, MEMBER M
+				WHERE U.USR_ST = 'Y'
+					AND U.USR_ID = M.USR_ID
+			)
+			GROUP BY MEMBER_ID
+			) MA
+			SET M.COST = MA.TOT
+		WHERE MA.MEMBER_ID = M.MEMBER_ID
+	</update>
+	
+	<!-- 쿠폰 사용자 등록 -->
+	<insert id="insertCouponByMember">
+		/* insertCouponByMember */
+		INSERT INTO COUPON_HIST(
+			USR_ID
+			, COUPON_ID
+			, USE_ST
+			, REG_DTTM
+		) 
+		SELECT
+			U.USR_ID
+			, #{couponId}
+			, 'R'
+			, NOW()
+		FROM USER U, MEMBER M
+		WHERE U.USR_ID = M.USR_ID
+			AND U.USR_ST = 'Y'
+			AND M.END_DT &gt; NOW()
+		GROUP BY U.USR_ID
+	</insert>
+	
+	<!-- 쿠폰 상태 발급  -->
+	<update id="updateCouponStatusDone">
+		/* updateCouponStatusDone */
+		UPDATE COUPON_INFO CI 
+			SET CI.COUPON_ST = 'D'
+		WHERE CI.COUPON_ID = #{value}
+	</update>
+	
+	<!-- 쿠폰 삭제  -->
+	<delete id="deleteCouponInfo">
+		/* deleteCouponInfo */
+		DELETE FROM COUPON_INFO
+		WHERE COUPON_ID = #{value}
+	</delete>
+	
+	<!-- 쿠폰 삭제  -->
+	<delete id="deleteUserCoupon">
+		/* deleteUserCoupon */
+		DELETE FROM COUPON_HIST
+		WHERE COUPON_ID = #{value}
+	</delete>
+	
+	<!-- 쿠폰 수정 -->
+	<update id="updateCouponInfo">
+		/* updateCouponInfo */
+		UPDATE COUPON_INFO
+			SET COUPON_NM = #{couponNm}
+			, COUPON_DESC = #{couponDesc}
+			, COUPON_STORE = #{couponStore}
+			, COUPON_IMG = #{couponImg}
+			, COUPON_TARGET = #{couponTarget}
+			, COUPON_CNT = #{couponCnt}
+			, PUSH_TYPE = #{pushType}
+			, PUSH_DESC = #{pushDesc}
+			, START_DT = #{startDt}
+			, END_DT =  #{endDt}
+			, REG_DTTM = NOW()	
+		WHERE COUPON_ID = #{couponId}
+	</update>
+	
+	<!-- 푸쉬 보낼 사용자 리슽   -->
+	<select id="selectPushUsrList" resultType="string">
+		/* selectPushUsrList */
+		SELECT
+			UT.UUID
+		FROM COUPON_INFO CI, COUPON_HIST CH, USER U, USER_TOKEN UT
+		WHERE CI.COUPON_ID = #{couponId}
+			AND CI.PUSH_TYPE='Y'
+			AND CI.COUPON_ID = CH.COUPON_ID
+			AND CH.USR_ID = U.USR_ID
+			AND U.USR_ID = UT.USR_ID
+			AND UT.UUID IS NOT NULL
+			AND UT.PUSH_ST = 'Y'
+			AND UT.UUID != ''
+			AND UT.OS = #{os}
+	</select>
+	
+	<!-- 푸쉬 보낼 내용 -->
+	<select id="selectCouponPush" resultType="string">
+		/* selectCouponPush */
+		SELECT
+			PUSH_DESC
+		FROM COUPON_INFO
+		WHERE COUPON_ID = #{value}
+			AND PUSH_TYPE = 'Y'
+			AND SEND_TP = 'R'
+	</select>
+	
+	<!-- 푸쉬 보낼 사용자 리슽   -->
+	<update id="deleteUUID">
+		/* deleteUUID */
+		UPDATE USER_TOKEN
+			SET UUID = ''
+		WHERE UUID = #{value}
+	</update>
+	
+	<!-- 쿠폰 코드 중복 체크  -->
+	<select id="selectCouponQr" resultType="int">
+		/* selectCouponQr */
+		SELECT
+			COUNT(ID)
+		FROM COUPON_HIST
+		WHERE QR_CODE = #{value}
+	</select>
+	
+	<!-- 모든 활성화 유저 -->
+	<select id="selectAllUser" resultType="string">
+		/* selectAllUser */
+		SELECT
+			USR_ID
+		FROM USER
+		WHERE USR_ST = 'Y'
+	</select>
+	
+</mapper>

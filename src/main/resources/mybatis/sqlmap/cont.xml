@@ -1,0 +1,292 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.i4unetworks.weys.cont.ContDao">
+
+	<!-- 컨텐츠 목록 리스트 -->
+	<select id="getContList" resultType="contVO">
+		/* getContList */
+		SELECT
+			CONT_ID
+			, CONT_TITLE
+			, CONT_CTGR
+			, SEQ
+			, LIST_TYPE
+			, DATE_FORMAT(START_DT, '%Y.%m.%d') START_DT
+			, DATE_FORMAT(END_DT, '%Y.%m.%d') END_DT
+		FROM CONT_INFO
+		ORDER BY SEQ
+		LIMIT #{pageSize} OFFSET #{searchPage}
+	</select>
+
+	<!-- 컨텐츠 전체 수  -->
+	<select id="getContListCnt" resultType="int">
+		/* getContListCnt */
+		SELECT
+			COUNT(CONT_ID)
+		FROM CONT_INFO
+	</select>
+	
+	<!-- 컨텐츠 상세 -->
+	<select id="selectContInfo" resultType="contVO">
+		/* selectContInfo */
+		SELECT
+			CONT_ID
+			, CONT_TITLE
+			, CONT_CTGR
+			, SEQ
+			, LIST_TYPE
+			, DATE_FORMAT(START_DT, '%Y.%m.%d') START_DT
+			, DATE_FORMAT(END_DT, '%Y.%m.%d') END_DT
+		FROM CONT_INFO
+		WHERE CONT_ID = #{value}
+	</select>
+	
+	<!-- 컨텐츠 내용 상세 리스트 -->
+	<select id="selectContInfoList" resultType="contListVO">
+		/* selectContInfoList */
+		SELECT
+			CL_ID
+			, CL_TITLE
+			, CL_SUB_TITLE
+			, CL_COLOR
+			, CL_IMG
+			, CL_URL
+			, CL_SEQ
+			, DATE_FORMAT(START_DT, '%Y.%m.%d') START_DT
+			, DATE_FORMAT(END_DT, '%Y.%m.%d') END_DT
+		FROM CONT_LIST
+		WHERE CONT_ID = #{value}
+		ORDER BY CL_SEQ
+	</select>
+	
+	<!-- 컨텐츠 저장 -->
+	<insert id="insertContInfo" useGeneratedKeys="true" keyProperty="contId">
+		/* insertContInfo */
+		INSERT INTO CONT_INFO(
+			CONT_TITLE
+			, CONT_CTGR
+			, LIST_TYPE
+			, CONT_ST
+			, START_DT
+			, END_DT
+			, SEQ
+			, REG_DTTM
+		)
+		SELECT
+			#{contTitle}
+			, #{contCtgr}
+			, #{listType}
+			, #{contSt}
+			, #{startDt}
+			, CONCAT(#{endDt}, ' 23:59:59')
+			, IFNULL(MAX(SEQ) + 1, 0)
+			, NOW()
+		FROM CONT_INFO
+	</insert>
+	
+	<!-- 컨텐츠 삭제 관련 -->
+	<update id="updateDeleteSeq">
+		/* updateDeleteSeq */
+		UPDATE CONT_LIST CL, (SELECT
+			CONT_ID
+			, CL_SEQ
+		FROM CONT_LIST
+		WHERE CL_ID = #{value}) C
+			SET CL.CL_SEQ = CL.CL_SEQ - 1
+		WHERE CL.CONT_ID = C.CONT_ID
+			AND CL.CL_SEQ &gt; C.CL_SEQ
+	</update>
+	
+	<!-- 컨텐츠 삭제  -->
+	<delete id="deleteContList">
+		/* deleteContList */
+		DELETE FROM CONT_LIST
+		WHERE CL_ID = #{value}
+	</delete>
+	
+	<!-- 컨텐츠 순위 변동  -->
+	<update id="updateClSeqUpF">
+		/* updateClSeqUpF */
+		UPDATE CONT_LIST CL, (SELECT
+			CL_SEQ - 1 CL_SEQ
+			, CONT_ID
+		FROM CONT_LIST
+		WHERE CL_ID = #{value}) C
+			SET CL.CL_SEQ = CL.CL_SEQ + 1
+		WHERE CL.CONT_ID = C.CONT_ID
+			AND CL.CL_SEQ = C.CL_SEQ
+	</update>
+	
+	<!-- 컨텐츠 순위 변동  -->
+	<update id="updateClSeqUpS">
+		/* updateClSeqUpS */
+		UPDATE CONT_LIST
+			SET CL_SEQ = CL_SEQ - 1
+		WHERE CL_ID = #{value}
+	</update>
+	
+	<!-- 컨텐츠 순위 변동  -->
+	<update id="updateClSeqDownF">
+		/* updateClSeqDownF */
+		UPDATE CONT_LIST CL, (SELECT
+			CL_SEQ + 1 CL_SEQ
+			, CONT_ID
+		FROM CONT_LIST
+		WHERE CL_ID = #{value}) C
+			SET CL.CL_SEQ = CL.CL_SEQ - 1
+		WHERE CL.CONT_ID = C.CONT_ID
+			AND CL.CL_SEQ = C.CL_SEQ
+	</update>
+	
+	<!-- 컨텐츠 순위 변동  -->
+	<update id="updateClSeqDownS">
+		/* updateClSeqDownS */
+		UPDATE CONT_LIST
+			SET CL_SEQ = CL_SEQ + 1
+		WHERE CL_ID = #{value}
+	</update>
+	
+	<!-- 컨텐츠 내용 변경 -->
+	<update id="updateContInfo">
+		/* updateContInfo */
+		UPDATE CONT_INFO
+			SET CONT_TITLE = #{contTitle}
+				, CONT_CTGR = #{contCtgr}
+				, LIST_TYPE = #{listType}
+				, START_DT = #{startDt}
+				, END_DT = CONCAT(#{endDt}, ' 23:59:59')
+				, CONT_ST = #{contSt}
+				<if test='contSt == "N"'>
+				, SEQ = 99
+				</if>
+		WHERE CONT_ID = #{contId}
+	</update>
+	
+	<!-- 컨텐츠 내용 변경 -->
+	<update id="updateContInfoSeq">
+		/* updateContInfoSeq */
+		UPDATE CONT_INFO CI, (SELECT
+			SEQ
+		FROM CONT_INFO
+		WHERE CONT_ID = #{value}) C
+			SET CI.SEQ = CI.SEQ - 1
+		WHERE CI.SEQ > C.SEQ
+	</update>
+	
+	<update id="updateContInfoSeqMax">
+		/* updateContInfoSeqMax */
+		UPDATE CONT_INFO
+			SET SEQ = MAX(SEQ) + 1
+		WHERE CONT_ST = 'Y'
+	</update>
+	
+	<!-- 이전 상태 -->
+	<select id="selectContInfoSt" resultType="string">
+		/* selectContInfoSt */
+		SELECT
+			CONT_ST
+		FROM CONT_INFO
+		WHERE CONT_ID = #{value}
+	</select>
+	
+	<!-- 컨텐츠 리스트 상세 -->
+	<select id="selectContListInfo" resultType="contListVO">
+		/* selectContListInfo */
+		SELECT
+			CL_ID
+			, CONT_ID
+			, CL_TITLE
+			, CL_SUB_TITLE
+			, CL_COLOR
+			, CL_IMG
+			, CL_URL
+			, DATE_FORMAT(START_DT, '%Y.%m.%d') START_DT
+			, DATE_FORMAT(END_DT, '%Y.%m.%d') END_DT
+		FROM CONT_LIST
+		WHERE CL_ID = #{value}
+	</select>
+	
+	<!-- 컨텐츠 리스트 등록 -->
+	<insert id="insertContList">
+		/* insertContList */
+		INSERT INTO CONT_LIST(
+			CONT_ID
+			, CL_TITLE
+			, CL_SUB_TITLE
+			, CL_COLOR
+			, CL_IMG
+			, CL_URL
+			, CL_SEQ
+			, START_DT
+			, END_DT
+			, REG_DTTM
+		)
+		SELECT
+			#{contId}
+			, #{clTitle}
+			, #{clSubTitle}
+			, #{clColor}
+			, #{clImg}
+			, #{clUrl}
+			, IFNULL(MAX(CL_SEQ) + 1, 1)
+			, #{startDt}
+			, CONCAT(#{endDt}, ' 23:59:59')
+			, NOW()
+		FROM CONT_LIST
+		WHERE CONT_ID = #{contId}
+	</insert>
+	
+	<!-- 컨텐츠 리스트 수정 -->
+	<update id="updateContListVO">
+		/* updateContListVO */
+		UPDATE CONT_LIST
+			SET CL_TITLE = #{clTitle}
+				, CL_SUB_TITLE = #{clSubTitle}
+				, CL_COLOR = #{clColor}
+				, CL_IMG = #{clImg}
+				, CL_URL =  #{clUrl}
+				, START_DT = #{startDt}
+				, END_DT = CONCAT(#{endDt}, ' 23:59:59')
+		WHERE CL_ID = #{clId}
+	</update>
+	
+	<!-- 컨텐츠 순서 변경 -->
+	<update id="updateContSeqUpF">
+		/* updateContSeqUpF */
+		UPDATE CONT_INFO CI, (SELECT
+			SEQ - 1 CI_SEQ
+		FROM CONT_INFO
+		WHERE CONT_ID = #{value}) C
+			SET SEQ = SEQ + 1
+		WHERE CI.SEQ = C.CI_SEQ
+	</update>
+	
+	<!-- 컨텐츠 순서 변경 -->
+	<update id="updateContSeqUpS">
+		/* updateContSeqUpS */
+		UPDATE CONT_INFO
+			SET SEQ = SEQ - 1
+		WHERE CONT_ID = #{value}
+	</update>
+	
+	<!-- 컨텐츠 순서 변경 -->
+	<update id="updateContSeqDownF">
+		/* updateContSeqDownF */
+		UPDATE CONT_INFO CI, (SELECT
+			SEQ + 1 CI_SEQ
+		FROM CONT_INFO
+		WHERE CONT_ID = #{value}) C
+			SET SEQ = SEQ - 1
+		WHERE CI.SEQ = C.CI_SEQ
+	</update>
+	
+	<!-- 컨텐츠 순서 변경 -->
+	<update id="updateContSeqDownS">
+		/* updateContSeqDownS */
+		UPDATE CONT_INFO
+			SET SEQ = SEQ + 1
+		WHERE CONT_ID = #{value}
+	</update>
+	
+	
+</mapper>

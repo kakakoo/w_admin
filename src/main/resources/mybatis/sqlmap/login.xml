@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.i4unetworks.weys.login.LoginDao">
+	
+	<!-- 사용자 로그인시 정보  -->
+	<select id="login" resultType="com.i4unetworks.weys.common.UserVO">
+	/* login */
+		SELECT
+			A.ADMIN_KEY
+			, A.ADMIN_PW
+			, A.ADMIN_ID
+			, A.ADMIN_NAME
+			, A.ADMIN_TP
+			, A.STORE_ID
+			, IFNULL(S.STORE_NM, '') STORE_NM
+			, DATE_FORMAT(A.PWD_DUE, '%Y.%m.%d') PWD_DUE
+		FROM ADMIN A
+		LEFT OUTER JOIN STORE S ON A.STORE_ID = S.STORE_ID
+		WHERE A.ADMIN_ID = #{value}
+			AND A.ADMIN_TP IN ('S', 'A', 'M')
+	</select>
+	
+	<!-- 최근 환율 정보  -->
+	<select id="selectDisplayInfo" resultType="map">
+	/* selectDisplayInfo */
+		SELECT
+			UNIT
+			, BASIC_RATE
+			, CASH_BUY
+			, CASH_SELL
+			, DATE_FORMAT(DTTM, '%Y-%m-%d %H:%i') DTTM
+		FROM EXCHANGE_RATE
+		WHERE UNIT IN ('USD', 'JPY', 'EUR', 'CNY')
+			AND DTTM IN (SELECT
+			MAX(DTTM)
+		FROM EXCHANGE_RATE)
+	</select>
+	
+	<!-- 오늘 환율 횟차 정보  -->
+	<select id="selectExchangeRateCnt" resultType="int">
+	/* selectExchangeRateCnt */
+		SELECT
+			COUNT(UNIT)
+		FROM EXCHANGE_RATE
+		WHERE UNIT='USD'
+			AND DTTM BETWEEN #{value} and CONCAT(#{value}, ' 23:59:59')
+	</select>
+
+	<!-- 접속한 관리자 정보 등록 -->
+	<insert id="insertAdminLog">
+	/* insertAdminLog */
+		INSERT INTO ADMIN_CONN_LOG(
+			ADMIN_KEY
+			, IP_ADDR
+			, REG_DTTM
+		)
+		SELECT
+			ADMIN_KEY
+			, #{clientIp}
+			, NOW()
+		FROM ADMIN
+		WHERE ADMIN_ID = #{id}
+	</insert>
+	
+	<!-- 관리자 비밀번호 변경 -->
+	<update id="updateAdmPwd">
+	/* updateAdmPwd */
+		UPDATE ADMIN
+			SET ADMIN_PW = #{adminPw}
+				, PWD_DUE = #{pwdDue}
+		WHERE ADMIN_KEY = #{adminKey}
+	</update>
+	
+	<!-- 관리자 비밀번호 변경 -->
+	<insert id="insertPwdLog">
+	/* insertPwdLog */
+		INSERT INTO ADMIN_PWD_LOG(
+			ADMIN_KEY
+			, TARGET_KEY
+			, REG_DTTM
+		) VALUES (
+			#{adminKey}
+			, #{adminKey}
+			, NOW()
+		)
+	</insert>
+
+	<!-- 환율 -->
+	<select id="selectExchangeRate" resultType="map">
+	/* selectExchangeRate */
+		SELECT
+			UNIT
+			, BASIC_RATE
+			, TRUNCATE((BASIC_RATE + CASH_BUY) / 2, 2) AS BUY
+			, TRUNCATE((BASIC_RATE + CASH_SELL) / 2, 2) AS SELL
+			, TRUNCATE(BASIC_RATE - ((BASIC_RATE - CASH_SELL) * 0.2), 2) AS SELL8
+			, DATE_FORMAT(DTTM, '%Y-%m-%d %H:%i') DTTM
+		FROM EXCHANGE_RATE
+		WHERE DTTM = (SELECT 
+			MAX(DTTM) DT 
+		FROM EXCHANGE_RATE)
+			AND UNIT IN ('USD', 'JPY', 'EUR', 'HKD', 'TWD', 'THB')
+	</select>
+	
+	<!-- 환율 -->
+	<select id="selectExchangeRateCny" resultType="map">
+	/* selectExchangeRateCny */
+		SELECT
+			UNIT
+			, BASIC_RATE
+			, TRUNCATE(BASIC_RATE + (CASH_BUY - BASIC_RATE) * 0.7, 2) AS BUY
+			, TRUNCATE(BASIC_RATE - (BASIC_RATE - CASH_SELL) * 0.7, 2) AS SELL
+			, TRUNCATE(BASIC_RATE - (BASIC_RATE - CASH_SELL) * 0.7, 2) AS SELL8
+			, DATE_FORMAT(DTTM, '%Y-%m-%d %H:%i') DTTM
+		FROM EXCHANGE_RATE
+		WHERE DTTM = (SELECT 
+			MAX(DTTM) DT 
+		FROM EXCHANGE_RATE)
+			AND UNIT = 'CNY'
+	</select>
+	
+	<!-- 외화 체ㅡㅋ -->
+	<select id="selectUnitList" resultType="string">
+	/* selectUnitList */
+		SELECT 
+			UNIT_CD 
+		FROM UNIT
+		WHERE RSV_ST = 'Y' 
+	</select>
+	
+	<!-- 돈 가져오기 -->
+	<select id="selectMoneyList" resultType="map">
+	/* selectMoneyList */
+		SELECT
+			MM_ID
+			, BUY_AMNT
+		FROM MONEY_MNG
+		WHERE UNIT = #{value}
+		ORDER BY BUY_DTTM
+	</select>
+	
+	<!-- 돈 가져오기 -->
+	<select id="selectBuyList" resultType="map">
+	/* selectBuyList */
+		SELECT
+			RSV_DT
+			, RSV_AMNT
+			, BASIC_RATE_WEYS BASIC_RATE
+		FROM RSV
+		WHERE UNIT = #{value}
+			AND RSV_ST = 'F'
+			AND RSV_DT &lt; '2019.06.17'
+		UNION ALL
+		SELECT
+			DATE_FORMAT(REG_DTTM, '%Y.%m.%d') RSV_DT
+			, PAY_AMNT RSV_AMNT
+			, BASIC_RATE
+		FROM MEMBER_ACTIVE
+		WHERE TP = 'B'
+			AND UNIT = #{value}
+			AND REG_DTTM BETWEEN '2018.02.07' AND '2019.06.17'
+		ORDER BY RSV_DT
+	</select>
+	
+	<update id="updateMoneyMng">
+	/* updateMoneyMng */
+		UPDATE MONEY_MNG
+			SET SELL_AMNT = #{sumAmnt}
+				, SELL_KOR = #{sumKor}
+		WHERE MM_ID = #{mmId}
+	</update>
+	
+</mapper>

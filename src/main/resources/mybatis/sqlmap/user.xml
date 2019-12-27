@@ -1,0 +1,651 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.i4unetworks.weys.user.UserDao">
+	
+	<!-- 사용자 리스트 정보  -->
+	<select id="getUserList" resultType="userListVO">
+	/* getUserList */
+		SELECT
+			U.USR_ID
+			, DATE_FORMAT(U.USR_REG_DTTM, '%Y.%m.%d %H:%i') regDttm
+			, U.USR_FROM
+			, CASE WHEN U.FORIGN = 'Y' THEN CONCAT(CAST(AES_DECRYPT(U.GIV_NM, SHA2(#{encKey},512)) AS CHAR), ' ', CAST(AES_DECRYPT(U.SUR_NM, SHA2(#{encKey},512)) AS CHAR))
+				ELSE CAST(AES_DECRYPT(U.USR_NM, SHA2(#{encKey},512)) AS CHAR) END USR_NM
+			, CAST(AES_DECRYPT(U.USR_EMAIL, SHA2(#{encKey},512)) AS CHAR) USR_EMAIL
+			, CONCAT(U.NATION, ' ', CAST(AES_DECRYPT(U.USR_TEL, SHA2(#{encKey},512)) AS CHAR)) USR_TEL
+			, IFNULL(R.RCNT, 0) RCNT
+			, IFNULL(RD.RDCNT, 0) RDCNT
+			, IFNULL(C.CCNT, 0) CCNT
+			, CASE WHEN U.USR_GRADE='N' THEN '일반' WHEN U.USR_GRADE='S' THEN '특별' ELSE '불량' END USR_GRADE
+		FROM USER U
+		LEFT OUTER JOIN (
+			SELECT
+				U.USR_ID
+				, COUNT(R.RSV_ID) RCNT
+			FROM USER U, RSV R
+			WHERE U.USR_ID = R.USR_ID
+				AND R.RSV_ST IN ('S', 'I', 'R')
+			GROUP BY U.USR_ID
+			) R ON U.USR_ID = R.USR_ID
+		LEFT OUTER JOIN (
+			SELECT
+				U.USR_ID
+				, COUNT(R.RSV_ID) RDCNT
+			FROM USER U, RSV R
+			WHERE U.USR_ID = R.USR_ID
+				AND R.RSV_ST = 'F'
+			GROUP BY U.USR_ID
+			) RD ON U.USR_ID = RD.USR_ID
+		LEFT OUTER JOIN (
+			SELECT
+				U.USR_ID
+				, COUNT(CH.ID) CCNT
+			FROM USER U, COUPON_HIST CH
+			WHERE U.USR_ID = CH.USR_ID
+				AND CH.USE_ST = 'Y'
+			GROUP BY U.USR_ID
+			) C ON U.USR_ID = C.USR_ID
+		WHERE U.USR_ST = 'Y'
+		<if test='dateType == "J"'>
+			AND U.USR_REG_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+		</if>
+		<if test='searchType == "t"'>
+			AND (U.USR_NM = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512)) OR U.USR_EMAIL = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512))
+				OR U.USR_TEL = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512)))
+		</if>
+		<if test='searchType == "n"'>
+			AND U.USR_NM = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512))
+		</if>
+		<if test='searchType == "e"'>
+			AND U.USR_EMAIL = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512))
+		</if>
+		<if test='searchType == "p"'>
+			AND U.USR_TEL = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512))
+		</if>
+		<if test='grade != null'>
+			AND U.USR_GRADE IN 
+			<foreach collection="listData" item="item" separator="," open="(" close=")">
+				#{item}
+			</foreach>
+		</if>
+		ORDER BY U.USR_ID DESC
+		LIMIT #{pageSize} OFFSET #{searchPage}
+	</select>
+
+	<!-- 사용자 리스트 정보 수   -->
+	<select id="getUserListCnt" resultType="int">
+	/* getUserListCnt */
+		SELECT
+			COUNT(U.USR_ID)
+		FROM USER U
+		INNER JOIN MEMBER M ON U.USR_ID = M.USR_ID
+		LEFT OUTER JOIN (
+			SELECT
+				U.USR_ID
+				, COUNT(R.RSV_ID) RCNT
+			FROM USER U, RSV R
+			WHERE U.USR_ID = R.USR_ID
+				AND R.RSV_ST IN ('S', 'I', 'R')
+			GROUP BY U.USR_ID
+			) R ON U.USR_ID = R.USR_ID
+		LEFT OUTER JOIN (
+			SELECT
+				U.USR_ID
+				, COUNT(R.RSV_ID) RDCNT
+			FROM USER U, RSV R
+			WHERE U.USR_ID = R.USR_ID
+				AND R.RSV_ST = 'F'
+			GROUP BY U.USR_ID
+			) RD ON U.USR_ID = RD.USR_ID
+		LEFT OUTER JOIN (
+			SELECT
+				U.USR_ID
+				, COUNT(CH.ID) CCNT
+			FROM USER U, COUPON_HIST CH
+			WHERE U.USR_ID = CH.USR_ID
+				AND CH.USE_ST = 'Y'
+			GROUP BY U.USR_ID
+			) C ON U.USR_ID = C.USR_ID
+		WHERE U.USR_ST = 'Y'
+		<if test='dateType == "J"'>
+			AND U.USR_REG_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+		</if>
+		<if test='searchType == "t"'>
+			AND (U.USR_NM = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512)) OR U.USR_EMAIL = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512))
+				OR U.USR_TEL = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512)))
+		</if>
+		<if test='searchType == "n"'>
+			AND U.USR_NM = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512))
+		</if>
+		<if test='searchType == "e"'>
+			AND U.USR_EMAIL = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512))
+		</if>
+		<if test='searchType == "p"'>
+			AND U.USR_TEL = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512))
+		</if>
+		<if test='grade != null'>
+			AND U.USR_GRADE IN 
+			<foreach collection="listData" item="item" separator="," open="(" close=")">
+				#{item}
+			</foreach>
+		</if>
+	</select>
+
+	<!-- 사용자 리스트 정보 엑셀  -->
+	<select id="selectUserExcel" resultType="userListVO">
+	/* selectUserExcel */
+		SELECT
+			U.USR_ID
+			, DATE_FORMAT(U.USR_REG_DTTM, '%Y.%m.%d') regDttm
+			, CASE WHEN U.FORIGN = 'Y' THEN CONCAT(CAST(AES_DECRYPT(U.GIV_NM, SHA2(#{encKey},512)) AS CHAR), ' ', CAST(AES_DECRYPT(U.SUR_NM, SHA2(#{encKey},512)) AS CHAR))
+				ELSE CAST(AES_DECRYPT(U.USR_NM, SHA2(#{encKey},512)) AS CHAR) END USR_NM
+			, CAST(AES_DECRYPT(U.USR_EMAIL, SHA2(#{encKey},512)) AS CHAR) USR_EMAIL
+			, CONCAT(U.NATION, ' ', CAST(AES_DECRYPT(U.USR_TEL, SHA2(#{encKey},512)) AS CHAR)) USR_TEL
+			, M.COST
+			, IFNULL(R.RCNT, 0) RCNT
+			, IFNULL(RD.RDCNT, 0) RDCNT
+			, IFNULL(C.CCNT, 0) CCNT
+			, CASE WHEN U.USR_GRADE='N' THEN '일반' WHEN U.USR_GRADE='S' THEN '특별' ELSE '불량' END USR_GRADE
+		FROM USER U
+		INNER JOIN MEMBER M ON U.USR_ID = M.USR_ID
+		LEFT OUTER JOIN (
+			SELECT
+				U.USR_ID
+				, COUNT(R.RSV_ID) RCNT
+			FROM USER U, RSV R
+			WHERE U.USR_ID = R.USR_ID
+				AND R.RSV_ST IN ('S', 'I', 'R')
+			GROUP BY U.USR_ID
+			) R ON U.USR_ID = R.USR_ID
+		LEFT OUTER JOIN (
+			SELECT
+				U.USR_ID
+				, COUNT(R.RSV_ID) RDCNT
+			FROM USER U, RSV R
+			WHERE U.USR_ID = R.USR_ID
+				AND R.RSV_ST = 'F'
+			GROUP BY U.USR_ID
+			) RD ON U.USR_ID = RD.USR_ID
+		LEFT OUTER JOIN (
+			SELECT
+				U.USR_ID
+				, COUNT(CH.ID) CCNT
+			FROM USER U, COUPON_HIST CH
+			WHERE U.USR_ID = CH.USR_ID
+				AND CH.USE_ST = 'Y'
+			GROUP BY U.USR_ID
+			) C ON U.USR_ID = C.USR_ID
+		WHERE U.USR_ST = 'Y'
+			AND M.COST BETWEEN #{minCost} AND #{maxCost}
+		<if test='dateType == "J"'>
+			AND U.USR_REG_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+		</if>
+		<if test='searchType == "t"'>
+			AND (U.USR_NM = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512)) OR U.USR_EMAIL = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512))
+				OR U.USR_TEL = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512)))
+		</if>
+		<if test='searchType == "n"'>
+			AND U.USR_NM = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512))
+		</if>
+		<if test='searchType == "e"'>
+			AND U.USR_EMAIL = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512))
+		</if>
+		<if test='searchType == "p"'>
+			AND U.USR_TEL = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512))
+		</if>
+		<if test='grade != null'>
+			AND U.USR_GRADE IN 
+			<foreach collection="listData" item="item" separator="," open="(" close=")">
+				#{item}
+			</foreach>
+		</if>
+		ORDER BY U.USR_ID DESC
+	</select>
+
+	<!-- 사용자 상세정보  -->
+	<select id="selectUserDetail" resultType="userListVO">
+	/* selectUserDetail */
+		SELECT
+			U.USR_ID
+			, DATE_FORMAT(U.USR_REG_DTTM, '%Y.%m.%d') regDttm
+			, CASE WHEN U.FORIGN = 'Y' THEN CONCAT(CAST(AES_DECRYPT(U.GIV_NM, SHA2(#{encKey},512)) AS CHAR), ' ', CAST(AES_DECRYPT(U.SUR_NM, SHA2(#{encKey},512)) AS CHAR))
+				ELSE CAST(AES_DECRYPT(U.USR_NM, SHA2(#{encKey},512)) AS CHAR) END USR_NM
+			, CAST(AES_DECRYPT(U.USR_EMAIL, SHA2(#{encKey},512)) AS CHAR) USR_EMAIL
+			, CONCAT(U.NATION, ' ', CAST(AES_DECRYPT(U.USR_TEL, SHA2(#{encKey},512)) AS CHAR)) USR_TEL
+			, M.COST
+			, IFNULL(R.RCNT, 0) RCNT
+			, IFNULL(RD.RDCNT, 0) RDCNT
+			, IFNULL(C.CCNT, 0) CCNT
+			, U.USR_GRADE
+		FROM USER U
+		INNER JOIN MEMBER M ON U.USR_ID = M.USR_ID
+		LEFT OUTER JOIN (
+			SELECT
+				U.USR_ID
+				, COUNT(R.RSV_ID) RCNT
+			FROM USER U, RSV R
+			WHERE U.USR_ID = #{usrId}
+				AND U.USR_ID = R.USR_ID
+				AND R.RSV_ST IN ('S', 'I', 'R')
+			GROUP BY U.USR_ID
+			) R ON U.USR_ID = R.USR_ID
+		LEFT OUTER JOIN (
+			SELECT
+				U.USR_ID
+				, COUNT(R.RSV_ID) RDCNT
+			FROM USER U, RSV R
+			WHERE U.USR_ID = #{usrId}
+				AND U.USR_ID = R.USR_ID
+				AND R.RSV_ST = 'F'
+			GROUP BY U.USR_ID
+			) RD ON U.USR_ID = RD.USR_ID
+		LEFT OUTER JOIN (
+			SELECT
+				U.USR_ID
+				, COUNT(CH.ID) CCNT
+			FROM USER U, COUPON_HIST CH
+			WHERE U.USR_ID = #{usrId}
+				AND U.USR_ID = CH.USR_ID
+				AND CH.USE_ST = 'Y'
+			GROUP BY U.USR_ID
+			) C ON U.USR_ID = C.USR_ID
+		WHERE U.USR_ID = #{usrId}
+	</select>
+	
+	<!-- 사용자 멤버십 정보  -->
+	<select id="getMembershipList" resultType="memberActiveVO">
+	/* getMembershipList */
+		SELECT
+			DATE_FORMAT(M.REG_DTTM, '%Y.%m.%d %H:%i') REG_DTTM
+			, CASE WHEN M.TP='B' THEN '구매' WHEN M.TP='S' THEN '판매' ELSE M.TP END tp
+			, M.UNIT unit
+			, M.GET_AMNT
+			, M.PAY_AMNT
+			, M.BASIC_RATE
+			, M.PAPER paper
+			, S.STORE_NM
+			, A.ADMIN_NAME
+		FROM MEMBER U
+		INNER JOIN MEMBER_ACTIVE M ON U.MEMBER_ID = M.MEMBER_ID
+		LEFT OUTER JOIN STORE S ON M.STORE_ID = S.STORE_ID
+		LEFT OUTER JOIN ADMIN A ON M.ADMIN_ID = A.ADMIN_KEY
+		WHERE U.USR_ID = #{usrId}
+		ORDER BY M.REG_DTTM DESC
+		<if test='isExcel == null'>
+		LIMIT #{pageSize} OFFSET #{searchPage}
+		</if>
+	</select>
+
+	<!-- 사용자 멤버십 정보 수   -->
+	<select id="getMembershipListCnt" resultType="int">
+	/* getMembershipListCnt */
+		SELECT
+			COUNT(M.MEMBER_ID)
+		FROM MEMBER U, MEMBER_ACTIVE M, STORE S, ADMIN A
+		WHERE U.USR_ID = #{value}
+			AND U.MEMBER_ID = M.MEMBER_ID
+			AND M.STORE_ID = S.STORE_ID
+			AND M.ADMIN_ID = A.ADMIN_KEY
+	</select>
+
+	<!-- 사용자 포인트 전환 내역 정보  -->
+	<select id="getChangePointList" resultType="userPointVO">
+	/* getChangePointList */
+		SELECT
+			DATE_FORMAT(P.REG_DTTM, '%Y.%m.%d %H:%i') REG_DTTM
+			, P.UNIT unit
+			, P.MEMO memo
+			, P.POINT point
+			, P.GET_AMNT
+			, P.BASIC_RATE
+			, P.PAPER paper
+			, S.STORE_NM
+			, A.ADMIN_NAME
+		FROM POINT P, STORE S, ADMIN A
+		WHERE P.USR_ID = #{usrId}
+			AND P.POINT_TP = 'C'
+			AND P.STORE_ID = S.STORE_ID
+			AND P.ADMIN_ID = A.ADMIN_KEY
+		ORDER BY P.REG_DTTM DESC
+		<if test='isExcel == null'>
+		LIMIT #{pageSize} OFFSET #{searchPage}
+		</if>
+	</select>
+
+	<!-- 사용자 포인트 전환 내역 정보  -->
+	<select id="getChangePointListCnt" resultType="int">
+	/* getChangePointListCnt */
+		SELECT
+			COUNT(P.USR_ID)
+		FROM POINT P, STORE S, ADMIN A
+		WHERE P.USR_ID = #{usrId}
+			AND P.POINT_TP = 'C'
+			AND P.STORE_ID = S.STORE_ID
+			AND P.ADMIN_ID = A.ADMIN_KEY
+	</select>
+
+	<!-- 사용자 포인트 사용 내역 정보  -->
+	<select id="getUsePointList" resultType="userPointVO">
+	/* getUsePointList */
+		SELECT
+			DATE_FORMAT(P.REG_DTTM, '%Y.%m.%d %H:%i') REG_DTTM
+			, P.MEMO memo
+			, P.POINT point
+			, P.PAPER paper
+		FROM POINT P
+		WHERE P.USR_ID = #{usrId}
+			AND P.POINT_TP = 'U'
+		ORDER BY P.REG_DTTM DESC
+		<if test='isExcel == null'>
+		LIMIT #{pageSize} OFFSET #{searchPage}
+		</if>
+	</select>
+
+	<!-- 사용자 포인트 사용 내역 정보  -->
+	<select id="getUsePointListCnt" resultType="int">
+	/* getUsePointListCnt */
+		SELECT
+			COUNT(P.USR_ID)
+		FROM POINT P
+		WHERE P.USR_ID = #{usrId}
+			AND P.POINT_TP = 'U'
+	</select>
+
+	<!-- 사용자 등급 수정-->
+	<update id="updateUsrGrade">
+	/* updateUsrGrade */
+		UPDATE USER
+			SET USR_GRADE = #{grade}
+		WHERE USR_ID = #{usrId}
+	</update>
+
+	<!-- 예약 리스트 -->
+	<select id="selectRsvList" resultType="map">
+	/* selectRsvList */
+		SELECT
+			RSV_NO
+			, CONCAT(RSV_DT, ' ', RSV_TM) RSV_DT
+			, UNIT
+			, RSV_AMNT
+			, BASIC_RATE_WEYS
+			, IFNULL(WEYS_BONUS, 0) WEYS_BONUS
+			, CMS
+			, GET_AMNT
+			, RSV_ST
+		FROM RSV
+		WHERE USR_ID = #{value}
+		ORDER BY RSV_ID DESC
+	</select>
+
+	<!-- 거래 리스트 -->
+	<select id="selectCostList" resultType="map">
+	/* selectCostList */
+		SELECT
+			MA.TP
+			, IFNULL(MA.GET_AMNT, '') GET_AMNT
+			, IFNULL(MA.UNIT, '') UNIT
+			, IFNULL(MA.BASIC_RATE, '') BASIC_RATE
+			, DATE_FORMAT(MA.REG_DTTM, '%Y.%m.%d %H:%i') REG_DTTM
+			, IFNULL(MA.PAY_AMNT, '') PAY_AMNT
+			, IFNULL(MA.ADD_COST, '') ADD_COST
+			, IFNULL(DATE_FORMAT(MA.DUE_DTTM, '%Y.%m.%d'), '') DUE_DTTM
+		FROM MEMBER_ACTIVE MA, MEMBER M
+		WHERE M.USR_ID = #{value}
+			AND M.MEMBER_ID = MA.MEMBER_ID
+			AND MA.TP IN ('N', 'C', 'E', 'V', 'B')
+		ORDER BY MA.ACTIVE_ID DESC
+	</select>
+	
+	<!-- 쿠폰 리스트 -->
+	<select id="selectCouponList" resultType="map">
+	/* selectCouponList */
+		SELECT 
+			CI.COUPON_TP
+			, CI.COUPON_NM
+			, CASE WHEN CH.USE_ST = 'D' THEN 'D' WHEN CI.END_DT &lt; NOW() THEN 'O' ELSE 'Y' END USE_ST
+			, DATE_FORMAT(CH.REG_DTTM, '%Y.%m.%d %H:%i') REG_DTTM
+			, IFNULL(DATE_FORMAT(CH.USE_DT, '%Y.%m.%d %H:%i'), '') USE_DT
+			, DATE_FORMAT(CI.END_DT, '%Y.%m.%d') END_DT
+		FROM COUPON_HIST CH, COUPON_INFO CI
+		WHERE CH.USR_ID = #{value}
+			AND CH.COUPON_ID = CI.COUPON_ID
+			AND CI.COUPON_TP IN ('B', 'DD', 'DR', 'P', 'C')
+		ORDER BY CI.END_DT DESC
+	</select>
+	
+	<!-- 발송 리스트 -->
+	<select id="selectSendList" resultType="map">
+	/* selectSendList */
+		SELECT
+			MSG
+			, TEMPLETE
+			, DATE_FORMAT(REG_DTTM, '%Y.%m.%d %H:%i') REG_DTTM
+		FROM KAKAO_LOG 
+		WHERE USR_ID = #{value}
+		ORDER BY SEND_ID DESC
+	</select>
+	
+	<!-- 접속 리스트 -->
+	<select id="selectLoginList" resultType="map">
+	/* selectLoginList */
+		SELECT 
+			DATE_FORMAT(CONN_DTTM, '%Y.%m.%d %H:%i:%s') CONN_DTTM
+		FROM USER_LOG_CONN 
+		WHERE USR_ID = #{value}
+		ORDER BY CONN_DTTM DESC
+	</select>
+	
+	<!-- 상담 리스트 -->
+	<select id="selectMemoList" resultType="map">
+	/* selectMemoList */
+		SELECT 
+			DATE_FORMAT(REG_DTTM, '%Y.%m.%d %H:%i:%s') REG_DTTM
+			, MEMO
+			, ADMIN
+		FROM USER_MEMO 
+		WHERE USR_ID = #{value}
+		ORDER BY REG_DTTM DESC
+	</select>
+	
+	<!-- sms 리스트 -->
+	<select id="selectSmsList" resultType="map">
+	/* selectSmsList */
+		SELECT 
+			DATE_FORMAT(U.REG_DTTM, '%Y.%m.%d %H:%i:%s') REG_DTTM
+			, U.SMS_INFO
+			, A.ADMIN_NAME
+		FROM USER_SMS U, ADMIN A
+		WHERE U.USR_ID = #{value}
+			AND U.ADMIN_KEY = A.ADMIN_KEY
+		ORDER BY U.REG_DTTM DESC
+	</select>
+	
+	<!-- 탈퇴 리스트 정보  -->
+	<select id="getUserDeleteList" resultType="userListVO">
+	/* getUserDeleteList */
+		SELECT
+			U.USR_ID
+			, DATE_FORMAT(U.USR_REG_DTTM, '%Y.%m.%d') regDttm
+			, DATE_FORMAT(U.USR_UNREG_DTTM, '%Y.%m.%d') USR_UNREG_DTTM
+			, CASE WHEN U.FORIGN = 'Y' THEN CONCAT(CAST(AES_DECRYPT(U.GIV_NM, SHA2(#{encKey},512)) AS CHAR), ' ', CAST(AES_DECRYPT(U.SUR_NM, SHA2(#{encKey},512)) AS CHAR))
+				ELSE CAST(AES_DECRYPT(U.USR_NM, SHA2(#{encKey},512)) AS CHAR) END USR_NM
+			, CAST(AES_DECRYPT(U.USR_EMAIL, SHA2(#{encKey},512)) AS CHAR) USR_EMAIL
+			, CONCAT(U.NATION, ' ', CAST(AES_DECRYPT(U.USR_TEL, SHA2(#{encKey},512)) AS CHAR)) USR_TEL
+			, IFNULL(R.RCNT, 0) RCNT
+			, IFNULL(RD.RDCNT, 0) RDCNT
+			, IFNULL(C.CCNT, 0) CCNT
+			, CASE WHEN U.USR_GRADE='N' THEN '일반' WHEN U.USR_GRADE='S' THEN '특별' ELSE '불량' END USR_GRADE
+		FROM USER U
+		LEFT OUTER JOIN (
+			SELECT
+				U.USR_ID
+				, COUNT(R.RSV_ID) RCNT
+			FROM USER U, RSV R
+			WHERE U.USR_ID = R.USR_ID
+				AND R.RSV_ST IN ('S', 'I', 'R')
+			GROUP BY U.USR_ID
+			) R ON U.USR_ID = R.USR_ID
+		LEFT OUTER JOIN (
+			SELECT
+				U.USR_ID
+				, COUNT(R.RSV_ID) RDCNT
+			FROM USER U, RSV R
+			WHERE U.USR_ID = R.USR_ID
+				AND R.RSV_ST = 'F'
+			GROUP BY U.USR_ID
+			) RD ON U.USR_ID = RD.USR_ID
+		LEFT OUTER JOIN (
+			SELECT
+				U.USR_ID
+				, COUNT(CH.ID) CCNT
+			FROM USER U, COUPON_HIST CH
+			WHERE U.USR_ID = CH.USR_ID
+				AND CH.USE_ST = 'Y'
+			GROUP BY U.USR_ID
+			) C ON U.USR_ID = C.USR_ID
+		WHERE U.USR_ST = 'N'
+		<if test='dateType == "J"'>
+			AND U.USR_UNREG_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+		</if>
+		<if test='searchType == "t"'>
+			AND (U.USR_NM = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512)) OR U.USR_EMAIL = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512))
+				OR U.USR_TEL = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512)))
+		</if>
+		<if test='searchType == "n"'>
+			AND U.USR_NM = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512))
+		</if>
+		<if test='searchType == "e"'>
+			AND U.USR_EMAIL = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512))
+		</if>
+		<if test='searchType == "p"'>
+			AND U.USR_TEL = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512))
+		</if>
+		<if test='grade != null'>
+			AND U.USR_GRADE IN 
+			<foreach collection="listData" item="item" separator="," open="(" close=")">
+				#{item}
+			</foreach>
+		</if>
+		ORDER BY U.USR_UNREG_DTTM DESC
+		LIMIT #{pageSize} OFFSET #{searchPage}
+	</select>
+
+	<!-- 사용자 리스트 정보 수   -->
+	<select id="getUserDeleteListCnt" resultType="int">
+	/* getUserDeleteListCnt */
+		SELECT
+			COUNT(U.USR_ID)
+		FROM USER U
+		LEFT OUTER JOIN (
+			SELECT
+				U.USR_ID
+				, COUNT(R.RSV_ID) RCNT
+			FROM USER U, RSV R
+			WHERE U.USR_ID = R.USR_ID
+				AND R.RSV_ST IN ('S', 'I', 'R')
+			GROUP BY U.USR_ID
+			) R ON U.USR_ID = R.USR_ID
+		LEFT OUTER JOIN (
+			SELECT
+				U.USR_ID
+				, COUNT(R.RSV_ID) RDCNT
+			FROM USER U, RSV R
+			WHERE U.USR_ID = R.USR_ID
+				AND R.RSV_ST = 'F'
+			GROUP BY U.USR_ID
+			) RD ON U.USR_ID = RD.USR_ID
+		LEFT OUTER JOIN (
+			SELECT
+				U.USR_ID
+				, COUNT(CH.ID) CCNT
+			FROM USER U, COUPON_HIST CH
+			WHERE U.USR_ID = CH.USR_ID
+				AND CH.USE_ST = 'Y'
+			GROUP BY U.USR_ID
+			) C ON U.USR_ID = C.USR_ID
+		WHERE U.USR_ST = 'N'
+		<if test='dateType == "J"'>
+			AND U.USR_UNREG_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+		</if>
+		<if test='searchType == "t"'>
+			AND (U.USR_NM = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512)) OR U.USR_EMAIL = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512))
+				OR U.USR_TEL = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512)))
+		</if>
+		<if test='searchType == "n"'>
+			AND U.USR_NM = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512))
+		</if>
+		<if test='searchType == "e"'>
+			AND U.USR_EMAIL = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512))
+		</if>
+		<if test='searchType == "p"'>
+			AND U.USR_TEL = AES_ENCRYPT(#{searchText}, SHA2(#{encKey},512))
+		</if>
+		<if test='grade != null'>
+			AND U.USR_GRADE IN 
+			<foreach collection="listData" item="item" separator="," open="(" close=")">
+				#{item}
+			</foreach>
+		</if>
+	</select>
+	
+	<!-- 상담내역 등록 -->
+	<insert id="insertMemo">
+	/* insertMemo */
+		INSERT INTO USER_MEMO(
+			USR_ID
+			, MEMO
+			, ADMIN
+			, REG_DTTM
+		) VALUES (
+			#{usrId}
+			, #{memo}
+			, #{admin}
+			, NOW()
+		)
+	</insert>
+	
+	<!-- 고객 연락처 정보 -->
+	<select id="selectUserTel" resultType="map">
+	/* selectUserTel */
+		SELECT
+			CAST(AES_DECRYPT(USR_TEL, SHA2(#{encKey},512)) AS CHAR) USR_TEL
+			, NATION
+		FROM USER
+		WHERE USR_ID = #{usrId}
+	</select>
+	
+	<!-- SMS 발신 정보 저장 -->
+	<insert id="insertUsrSms">
+	/* insertUsrSms */
+		INSERT INTO USER_SMS(
+			USR_ID
+			, ADMIN_KEY
+			, SMS_INFO
+			, REG_DTTM
+		) VALUES (
+			#{usrId}
+			, #{adminKey}
+			, #{memo}
+			, NOW()
+		)
+	</insert>
+	
+	<!-- sms 발송 내역 저장 -->
+	<insert id="insertSmsSend">
+	/* insertSmsSend */
+		INSERT INTO SMS_SEND(
+			NATION
+			, TEL
+			, TXT
+			, RES
+			, REG_DTTM
+		) VALUES (
+			#{nation}
+			, AES_ENCRYPT(#{tel}, SHA2(#{encKey},512))
+			, #{txt}
+			, #{res}
+			, NOW()
+		)
+	</insert>
+	
+</mapper>

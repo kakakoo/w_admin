@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.i4unetworks.weys.trade.TradeDao">
+
+	<!-- 거래 목록 리스트 -->
+	<select id="getTradeList" resultType="tradeDetailVO">
+		/* getTradeList */
+		SELECT
+			T.TRADE_ID
+			, DATE_FORMAT(T.TRADE_REG_DTTM, '%Y.%m.%d %H:%i') TRADE_DT
+			, CASE WHEN T.TRADE_TP = 'B' THEN '구매' ELSE '판매' END AS TRADE_TP
+			, T.TRADE_UNIT
+			, T.TRADE_AMNT
+			, T.TRADE_TEXT
+			, CASE WHEN T.AREA2_SIDO IS NULL OR T.AREA2_SIDO = '' THEN T.AREA1_SIDO ELSE CONCAT(T.AREA1_SIDO, ',',  T.AREA2_SIDO) END AS TRADE_SIDO
+			, CAST(AES_DECRYPT(U.USR_EMAIL, SHA2(#{encKey},512)) AS CHAR) USR_EMAIL
+			, U.USR_NICK
+			, CASE WHEN T.TRADE_ST = 'Y' THEN '거래중' WHEN T.TRADE_ST = 'D' THEN '완료' ELSE '삭제' END AS TRADE_ST
+		FROM TRADE T, USER U
+		WHERE T.USR_ID = U.USR_ID
+			AND T.TRADE_REG_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+		<if test='trdUnit != null'>
+			AND T.TRADE_UNIT IN 
+			<foreach collection="listData" item="item" separator="," open="(" close=")">
+				#{item}
+			</foreach>
+		</if>
+		<if test='trdTp != null'>
+			AND T.TRADE_TP IN 
+			<foreach collection="listData1" item="item" separator="," open="(" close=")">
+				#{item}
+			</foreach>
+		</if>
+		<if test='searchType == "t"'>
+			AND (U.USR_NICK LIKE CONCAT('%',#{searchText},'%') OR U.USR_EMAIL = CAST(AES_DECRYPT(#{searchText}, SHA2(#{encKey},512)) AS CHAR))
+		</if>
+		<if test='searchType == "n"'>
+			AND U.USR_NICK LIKE CONCAT('%',#{searchText},'%')
+		</if>
+		<if test='searchType == "e"'>
+			AND U.USR_EMAIL = CAST(AES_DECRYPT(#{searchText}, SHA2(#{encKey},512)) AS CHAR)
+		</if>
+		ORDER BY T.TRADE_ID DESC
+		LIMIT #{pageSize} OFFSET #{searchPage}
+	</select>
+
+	<!-- 거래글 전체 수  -->
+	<select id="getTradeListCnt" resultType="int">
+		/* getTradeListCnt */
+		SELECT
+			COUNT(T.TRADE_ID)
+		FROM TRADE T, USER U
+		WHERE T.USR_ID = U.USR_ID
+			AND T.TRADE_REG_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+		<if test='trdUnit != null'>
+			AND T.TRADE_UNIT IN 
+			<foreach collection="listData" item="item" separator="," open="(" close=")">
+				#{item}
+			</foreach>
+		</if>
+		<if test='trdTp != null'>
+			AND T.TRADE_TP IN 
+			<foreach collection="listData1" item="item" separator="," open="(" close=")">
+				#{item}
+			</foreach>
+		</if>
+		<if test='searchType == "t"'>
+			AND (U.USR_NM LIKE CONCAT('%',#{searchText},'%') OR U.USR_EMAIL = CAST(AES_DECRYPT(#{searchText}, SHA2(#{encKey},512)) AS CHAR))
+		</if>
+		<if test='searchType == "n"'>
+			AND U.USR_NM LIKE CONCAT('%',#{searchText},'%')
+		</if>
+		<if test='searchType == "e"'>
+			AND U.USR_EMAIL = CAST(AES_DECRYPT(#{searchText}, SHA2(#{encKey},512)) AS CHAR)
+		</if>
+	</select>
+
+	<!-- 거래 목록 리스트 엑셀 -->
+	<select id="selectTradeExcel" resultType="tradeDetailVO">
+		/* selectTradeExcel */
+		SELECT
+			T.TRADE_ID
+			, DATE_FORMAT(T.TRADE_REG_DTTM, '%Y.%m.%d %H:%i') TRADE_DT
+			, CASE WHEN T.TRADE_TP = 'B' THEN '구매' ELSE '판매' END AS TRADE_TP
+			, T.TRADE_UNIT
+			, T.TRADE_AMNT
+			, T.TRADE_TEXT
+			, CASE WHEN T.AREA2_SIDO IS NULL OR T.AREA2_SIDO = '' THEN T.AREA1_SIDO ELSE CONCAT(T.AREA1_SIDO, ',',  T.AREA2_SIDO) END AS TRADE_SIDO
+			, CAST(AES_DECRYPT(U.USR_EMAIL, SHA2(#{encKey},512)) AS CHAR) USR_EMAIL
+			, U.USR_NM
+			, CASE WHEN T.TRADE_ST = 'Y' THEN '거래중' WHEN T.TRADE_ST = 'D' THEN '완료' ELSE '삭제' END AS TRADE_ST
+		FROM TRADE T, USER U
+		WHERE T.USR_ID = U.USR_ID
+			AND T.TRADE_REG_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+		<if test='trdUnit != null'>
+			AND T.TRADE_UNIT IN 
+			<foreach collection="listData" item="item" separator="," open="(" close=")">
+				#{item}
+			</foreach>
+		</if>
+		<if test='trdTp != null'>
+			AND T.TRADE_TP IN 
+			<foreach collection="listData1" item="item" separator="," open="(" close=")">
+				#{item}
+			</foreach>
+		</if>
+		<if test='searchType == "t"'>
+			AND (U.USR_NM LIKE CONCAT('%',#{searchText},'%') OR U.USR_EMAIL = CAST(AES_DECRYPT(#{searchText}, SHA2(#{encKey},512)) AS CHAR) )
+		</if>
+		<if test='searchType == "n"'>
+			AND U.USR_NM LIKE CONCAT('%',#{searchText},'%')
+		</if>
+		<if test='searchType == "e"'>
+			AND U.USR_EMAIL = CAST(AES_DECRYPT(#{searchText}, SHA2(#{encKey},512)) AS CHAR)
+		</if>
+		ORDER BY T.TRADE_ID DESC
+	</select>
+
+</mapper>

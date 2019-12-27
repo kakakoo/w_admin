@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.i4unetworks.weys.cash.CashDao">
+
+	<!-- 현금영수증 리스트 -->
+	<select id="selectCashList" resultType="cashVO">
+		/* selectCashList */
+		SELECT
+			CASH_ID
+			, CAST(AES_DECRYPT(USR_NM, SHA2(#{encKey},512)) AS CHAR) USR_NM
+			, CAST(AES_DECRYPT(USR_EMAIL, SHA2(#{encKey},512)) AS CHAR) USR_EMAIL
+			, CAST(AES_DECRYPT(USR_CONTACT, SHA2(#{encKey},512)) AS CHAR) USR_CONTACT
+			, AMNT
+			, CASE WHEN CASH_TP = 'U' THEN '소득공제용' ELSE '지출증빙용' END CASH_TP
+			, MGT_KEY
+			, ITEM_NAME
+			, ORDER_NUMBER
+			, CASH_ST
+			, DATE_FORMAT(REG_DTTM, '%Y.%m.%d %H:%i') REG_DTTM
+		FROM CASH_BILL
+		WHERE REG_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+		ORDER BY CASH_ID DESC
+		LIMIT #{pageSize} OFFSET #{searchPage}
+	</select>
+
+	<!-- 현금영수증 리스트 -->
+	<select id="selectCashListCnt" resultType="int">
+		/* selectCashListCnt */
+		SELECT
+			COUNT(CASH_ID)
+		FROM CASH_BILL
+		WHERE REG_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+	</select>
+
+	<!-- 현금영수증 정보 -->
+	<select id="selectCashInfo" resultType="cashVO">
+		/* selectCashInfo */
+		SELECT
+			CASH_ID
+			, CAST(AES_DECRYPT(USR_NM, SHA2(#{encKey},512)) AS CHAR) USR_NM
+			, CAST(AES_DECRYPT(USR_EMAIL, SHA2(#{encKey},512)) AS CHAR) USR_EMAIL
+			, CAST(AES_DECRYPT(USR_CONTACT, SHA2(#{encKey},512)) AS CHAR) USR_CONTACT
+			, AMNT
+			, CASH_TP
+			, MGT_KEY
+			, ITEM_NAME
+			, ORDER_NUMBER
+			, MEMO
+			, CASH_ST
+			, DATE_FORMAT(REG_DTTM, '%Y.%m.%d %H:%i') REG_DTTM
+		FROM CASH_BILL
+		WHERE CASH_ID = #{cashId}
+			AND CASH_ST = 'R'
+	</select>
+	
+	<!-- 현금영수증 정보 업데이트 -->
+	<update id="updateCashInfo">
+		/* updateCashInfo */
+		UPDATE CASH_BILL
+			SET CASH_ST = 'D'
+				, MGT_KEY = #{mgtKey}
+				, ORDER_NUMBER = #{orderNumber}
+				, DONE_DTTM = NOW()
+		WHERE CASH_ID = #{cashId}
+	</update>
+
+</mapper>

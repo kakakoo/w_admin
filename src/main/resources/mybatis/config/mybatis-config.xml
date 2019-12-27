@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE configuration PUBLIC "-//mybatis.org//DTD Config 3.0//EN" "HTTP://mybatis.org/dtd/mybatis-3-config.dtd">
+<configuration>
+	<settings>
+		<setting name="mapUnderscoreToCamelCase" value="true" />
+		<setting name="callSettersOnNulls" value="true"/><!-- data가 null일때 속성 설정 -->
+	</settings>
+	 
+	<typeAliases>
+  		<typeAlias type="com.i4unetworks.weys.common.Paging" alias="paging"/>
+  		<typeAlias type="com.i4unetworks.weys.trade.TradeDetailVO" alias="tradeDetailVO"/>
+  		<typeAlias type="com.i4unetworks.weys.notice.NoticeDetailVO" alias="noticeDetailVO"/>
+  		<typeAlias type="com.i4unetworks.weys.user.UserListVO" alias="userListVO"/>
+  		<typeAlias type="com.i4unetworks.weys.user.UserPointVO" alias="userPointVO"/>
+  		<typeAlias type="com.i4unetworks.weys.user.MemberActiveVO" alias="memberActiveVO"/>
+  		<typeAlias type="com.i4unetworks.weys.version.VersionVO" alias="versionVO"/>
+  		<typeAlias type="com.i4unetworks.weys.store.StoreListVO" alias="storeListVO"/>
+  		<typeAlias type="com.i4unetworks.weys.store.StoreDetailVO" alias="storeDetailVO"/>
+  		<typeAlias type="com.i4unetworks.weys.store.StoreStaffVO" alias="storeStaffVO"/>
+  		<typeAlias type="com.i4unetworks.weys.store.StoreChangeVO" alias="storeChangeVO"/>
+  		<typeAlias type="com.i4unetworks.weys.unit.UnitListVO" alias="unitListVO"/>
+  		<typeAlias type="com.i4unetworks.weys.unit.UnitVO" alias="unitVO"/>
+  		<typeAlias type="com.i4unetworks.weys.member.MemberVO" alias="memberVO"/>
+  		<typeAlias type="com.i4unetworks.weys.banner.BannerVO" alias="bannerVO"/>
+  		<typeAlias type="com.i4unetworks.weys.coupon.CouponVO" alias="couponVO"/>
+  		<typeAlias type="com.i4unetworks.weys.manage.MemberListVO" alias="memberListVO"/>
+  		<typeAlias type="com.i4unetworks.weys.manage.ActiveListVO" alias="activeListVO"/>
+  		<typeAlias type="com.i4unetworks.weys.manage.ClientInfoVO" alias="clientInfoVO"/>
+  		<typeAlias type="com.i4unetworks.weys.manage.LogVO" alias="logVO"/>
+  		<typeAlias type="com.i4unetworks.weys.analysis.AnalysisVO" alias="analysisVO"/>
+  		<typeAlias type="com.i4unetworks.weys.chart.ChartBSVO" alias="chartBSVO"/>
+  		<typeAlias type="com.i4unetworks.weys.chart.ChartUnitVO" alias="chartUnitVO"/>
+  		
+  		<typeAlias type="com.i4unetworks.weys.rsv.GroupVO" alias="groupVO"/>
+  		<typeAlias type="com.i4unetworks.weys.rsv.RsvListVO" alias="rsvListVO"/>
+  		<typeAlias type="com.i4unetworks.weys.rsv.RsvUnitVO" alias="rsvUnitVO"/>
+  		<typeAlias type="com.i4unetworks.weys.rsv.RsvExcelVO" alias="rsvExcelVO"/>
+  		<typeAlias type="com.i4unetworks.weys.pay.PayListVO" alias="payListVO"/>
+  		<typeAlias type="com.i4unetworks.weys.cash.CashVO" alias="cashVO"/>
+  		<typeAlias type="com.i4unetworks.weys.version.AdmLogVO" alias="admLogVO"/>
+  		<typeAlias type="com.i4unetworks.weys.version.MngVO" alias="mngVO"/>
+  		<typeAlias type="com.i4unetworks.weys.version.SmsVO" alias="smsVO"/>
+  		
+  		<typeAlias type="com.i4unetworks.weys.event.EventVO" alias="eventVO"/>
+  		<typeAlias type="com.i4unetworks.weys.cop.CopVO" alias="copVO"/>
+  		<typeAlias type="com.i4unetworks.weys.cop.CopBnrVO" alias="copBnrVO"/>
+  		<typeAlias type="com.i4unetworks.weys.cont.ContVO" alias="contVO"/>
+  		<typeAlias type="com.i4unetworks.weys.cont.ContListVO" alias="contListVO"/>
+  		
+  		<typeAlias type="com.i4unetworks.weys.money.MoneyListVO" alias="moneyListVO"/>
+  		<typeAlias type="com.i4unetworks.weys.gold.GoldVO" alias="goldVO"/>
+  		
+  		<typeAlias type="com.i4unetworks.weys.staff.StaffVO" alias="staffVO"/>
+  	</typeAliases>
+</configuration>

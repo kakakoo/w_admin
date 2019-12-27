@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans
+	    xmlns="http://www.springframework.org/schema/beans"
+		xmlns:aop="http://www.springframework.org/schema/aop" 
+		xmlns:tx="http://www.springframework.org/schema/tx"
+		xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+		xmlns:task="http://www.springframework.org/schema/task"
+		xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+       					   http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop.xsd
+                           http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx.xsd
+                           http://www.springframework.org/schema/task http://www.springframework.org/schema/task/spring-task-3.1.xsd">
+	<!-- mybatis 설정 시작 -->
+	
+	
+	<bean id="propertyConfigurer" class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+        <property name="locations">
+            <list>
+                <value>classpath:/properties/global.properties</value>
+            </list>
+        </property>
+    </bean>
+	
+	<bean id="dataSource" class="org.apache.commons.dbcp.BasicDataSource">
+		<property name="driverClassName" value="${MYSQL.DRIVER}" />
+		<property name="url" value="${MYSQL.URL}"/>
+		<property name="username" value="${MYSQL.NAME}"/>
+		<property name="password" value="${MYSQL.PWD}"/>
+	</bean>		
+
+
+	<!-- mybatis 설정 및 mapper 경로 설정 -->	
+	<bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+		<property name="dataSource" ref="dataSource" />
+		<property name="configLocation" value="classpath:mybatis/config/mybatis-config.xml" /><!-- 설정 경로  -->
+		<property name="mapperLocations" value="classpath:mybatis/sqlmap/*.xml" />			  <!-- mapper 경로 -->
+	</bean>
+
+	<!-- mybatis Mapper scan package 경로 설정 -->
+	<bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+		<property name="basePackage" value="com.i4unetworks.weys" />
+		<property name="sqlSessionFactoryBeanName" value="sqlSessionFactory" />
+	</bean>
+	
+	<!-- spring mybatis sessionTemplate 설정 -->
+	<bean class="org.mybatis.spring.SqlSessionTemplate" id="sqlSession">
+		<constructor-arg ref="sqlSessionFactory" index="0" />
+	</bean>
+	
+	<!-- mybatis 설정 종료 -->
+	
+	<!-- was jndi datasource 를 spring transaction manager에 맵핑 -->
+	<bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+		<property name="dataSource" ref="dataSource" />
+	</bean>
+
+	<!-- transaction manager에 advice 설정 -->
+	<!-- 아래의pointcut에서 모든 Service가 포함된 메소드 중 insert, update, delete, modify등 아래의 method에 정의된 함수에서 Exception발생시 롤백 실행 -->
+	<tx:advice id="txAdvice" transaction-manager="transactionManager">
+		<tx:attributes>
+			<tx:method name="insert*" rollback-for="Exception" propagation="REQUIRED" /><!-- insert* 함수에서 Exception발생시 롤백 -->
+			<tx:method name="update*" rollback-for="Exception" propagation="REQUIRED" /><!-- update* 함수에서 Exception발생시 롤백 -->
+			<tx:method name="delete*" rollback-for="Exception" propagation="REQUIRED" /><!-- delete* 함수에서 Exception발생시 롤백 -->
+			<tx:method name="modify*" rollback-for="Exception" propagation="REQUIRED" /><!-- modify* 함수에서 Exception발생시 롤백 -->
+			<tx:method name="*" read-only="true" />
+		</tx:attributes>
+	</tx:advice>
+
+	<!-- advice의 aop pointcut 설정  -->
+	<aop:config>
+		<aop:advisor advice-ref="txAdvice" pointcut="execution(* *..*Service.*(..))" /><!-- 모든 Service가 포함된 메소드 -->
+	</aop:config>
+	<!-- Transaction 설정 종료 -->
+</beans>

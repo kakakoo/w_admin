@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.i4unetworks.weys.money.MoneyDao">
+
+	<!-- 환율 관리 리스트 -->
+	<select id="selectMoneyList" resultType="moneyListVO">
+		/* selectMoneyList */
+		SELECT
+			UNIT
+			, BUY_AMNT
+			, BUY_RATE
+			, BUY_KOR
+			, DATE_FORMAT(BUY_DTTM, '%Y.%m.%d') BUY_DTTM
+			, SELL_AMNT
+			, SELL_KOR
+		FROM MONEY_MNG
+		ORDER BY MM_ID DESC
+		LIMIT #{pageSize} OFFSET #{searchPage}
+	</select>
+
+	<!-- 환율 관리 전체 수 -->
+	<select id="selectMoneyListCnt" resultType="int">
+		/* selectMoneyListCnt */
+		SELECT
+			COUNT(MM_ID)
+		FROM MONEY_MNG
+	</select>
+	
+	<!-- 매입 외화 등록 -->
+	<insert id="insertMoneyMng">
+		/* insertMoneyMng */
+		INSERT INTO MONEY_MNG(
+			UNIT
+			, BUY_AMNT
+			, BUY_RATE
+			, BUY_KOR
+			, BUY_DTTM
+		) VALUES (
+		 	#{unit}
+		 	, #{amnt}
+		 	, #{basicRate}
+		 	, #{buyKor}
+		 	, NOW()
+		)
+	</insert>
+	
+</mapper>

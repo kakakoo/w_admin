@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.i4unetworks.weys.version.VersionDao">
+
+	<!-- 버전 정보 -->
+	<select id="selectVersionInfo" resultType="versionVO">
+		/* selectVersionInfo */
+		SELECT
+			OS os
+			, VERSION version
+			, URL url
+			, MARKET market
+		FROM VERSION
+		WHERE OS = #{value}
+	</select>
+
+	<!-- 버전 업데이트 -->
+	<update id="updateVersion">
+		/* updateVersion */
+		UPDATE VERSION
+			SET URL = #{url}
+				, VERSION = #{version}
+				, MARKET = #{market}
+		WHERE OS = #{os}
+	</update>
+
+	<!-- 로그 정보 -->
+	<select id="selectAdmLog" resultType="admLogVO">
+		/* selectAdmLog */
+		SELECT
+			A.ADMIN_ID
+			, ACL.IP_ADDR
+			, DATE_FORMAT(ACL.REG_DTTM, '%Y.%m.%d %H:%i') REG_DTTM
+		FROM ADMIN_CONN_LOG ACL, ADMIN A 
+		WHERE ACL.ADMIN_KEY = A.ADMIN_KEY
+		ORDER BY ACL.REG_DTTM DESC
+		LIMIT #{pageSize} OFFSET #{searchPage}
+	</select>
+	
+	<!-- 로그 총수  -->
+	<select id="selectAdmLogCnt" resultType="int">
+		/* selectAdmLogCnt */
+		SELECT
+			COUNT(ADMIN_ID)
+		FROM ADMIN_CONN_LOG ACL, ADMIN A 
+		WHERE ACL.ADMIN_KEY = A.ADMIN_KEY
+	</select>
+
+	<!-- 담당자 관리  -->
+	<select id="selectMngList" resultType="mngVO">
+		/* selectMngList */
+		SELECT
+			MG_ID
+			, CAST(AES_DECRYPT(MG_NM, SHA2(#{encKey},512)) AS CHAR) MG_NM
+			, CAST(AES_DECRYPT(MG_TEL, SHA2(#{encKey},512)) AS CHAR) MG_TEL
+			, MG_ST
+			, DATE_FORMAT(REG_DTTM, '%Y.%m.%d %H:%i') REG_DTTM
+		FROM MANAGER
+	</select>
+
+	<!-- 담당자 관리  -->
+	<select id="selectMngInfo" resultType="mngVO">
+		/* selectMngInfo */
+		SELECT
+			MG_ID
+			, CAST(AES_DECRYPT(MG_NM, SHA2(#{encKey},512)) AS CHAR) MG_NM
+			, CAST(AES_DECRYPT(MG_TEL, SHA2(#{encKey},512)) AS CHAR) MG_TEL
+			, MG_ST
+		FROM MANAGER
+		WHERE MG_ID = #{mgId}
+	</select>
+	
+	<!-- 담당자 등록  -->
+	<insert id="insertManager">
+		/* insertManager */
+		INSERT INTO MANAGER(
+			MG_NM
+			, MG_TEL
+			, MG_ST
+			, REG_DTTM
+		) VALUES (
+			AES_ENCRYPT(#{mgNm}, SHA2(#{encKey},512))
+			, AES_ENCRYPT(#{mgTel}, SHA2(#{encKey},512))
+			, #{mgSt}
+			, NOW()
+		)
+	</insert>
+	
+	<!-- 담당자  업데이트 -->
+	<update id="updateManager">
+		/* updateManager */
+		UPDATE MANAGER
+			SET MG_NM = AES_ENCRYPT(#{mgNm}, SHA2(#{encKey},512))
+				, MG_TEL = AES_ENCRYPT(#{mgTel}, SHA2(#{encKey},512))
+				, MG_ST = #{mgSt}
+		WHERE MG_ID = #{mgId}
+	</update>
+	
+	<!-- 담당자 삭제 -->
+	<delete id="deleteManager">
+		/* deleteManager */
+		DELETE FROM MANAGER
+		WHERE MG_ID = #{value}
+	</delete>
+
+	<!-- SMS 리스트 -->
+	<select id="selectSmsList" resultType="smsVO">
+		/* selectSmsList */
+		SELECT
+			SMS_ID
+			, SMS_TITLE
+			, SMS_TEXT
+		FROM ADMIN_SMS
+	</select>
+
+	<!-- SMS 정보-->
+	<select id="selectSmsInfo" resultType="smsVO">
+		/* selectSmsInfo */
+		SELECT
+			SMS_ID
+			, SMS_TITLE
+			, SMS_TEXT
+		FROM ADMIN_SMS
+		WHERE SMS_ID = #{value}
+	</select>
+	
+	<!-- SMS 정보 등록-->
+	<insert id="insertSms">
+		/* insertSms */
+		INSERT INTO ADMIN_SMS(
+			SMS_TITLE
+			, SMS_TEXT
+		) VALUES(
+			#{smsTitle}
+			, #{smsText}
+		)
+	</insert>
+	
+	<!-- SMS 정보 수정-->
+	<update id="updateSms">
+		/* updateSms */
+		UPDATE ADMIN_SMS
+			SET SMS_TITLE = #{smsTitle}
+				, SMS_TEXT = #{smsText}
+		WHERE SMS_ID = #{smsId}
+	</update>
+	
+	<!-- SMS 정보 삭제-->
+	<delete id="deleteSms">
+		/* deleteSms */
+		DELETE FROM ADMIN_SMS
+		WHERE SMS_ID = #{value}
+	</delete>
+
+</mapper>

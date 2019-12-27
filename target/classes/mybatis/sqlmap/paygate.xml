@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.i4unetworks.weys.paygate.PaygateDao">
+	
+	<!-- 로그 등록 -->
+	<insert id="insertPaygateLog">
+		/* insertPaygateLog */
+		INSERT INTO PGATE_LOG(
+			TID
+			, LOG_DATA
+			, REG_DTTM
+		) VALUES (
+			#{tid}
+			, #{log}
+			, NOW()
+		)
+	</insert>
+
+	<!-- 예약내역 확인 -->
+	<select id="selectRsvCheck" resultType="int">
+		/* selectRsvCheck */
+		SELECT
+			COUNT(RSV_ID)
+		FROM RSV
+		WHERE RSV_ST = 'S'
+			AND TID = #{tid}
+			AND REF_ID = #{refId}
+	</select>
+
+	<!-- 예약내역 확인 -->
+	<select id="selectRsvId" resultType="int">
+		/* selectRsvId */
+		SELECT
+			RSV_ID
+		FROM RSV
+		WHERE RSV_ST = 'S'
+			AND TID = #{tid}
+			AND REF_ID = #{refId}
+	</select>
+</mapper>

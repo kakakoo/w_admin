@@ -1,0 +1,362 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.i4unetworks.weys.schedule.ScheduleDao">
+
+	<!-- 해당 시간대 환율 정보 있는지 확인 -->
+	<select id="checkDate" resultType="string">
+	/* checkDate */
+		SELECT
+			DATE_FORMAT(MAX(DTTM), '%Y.%m.%d %H:%i')
+		FROM EXCHANGE_RATE
+	</select>
+	
+	<!-- 환율정보 입력  -->
+	<insert id="insertExchange">
+	/* insertExchange */
+		INSERT INTO EXCHANGE_RATE(
+			UNIT
+			, BASIC_RATE
+			, CASH_BUY
+			, CASH_SELL
+			, DTTM
+			, REG_DTTM
+		) VALUES (
+			#{unit}
+			, #{basicRate}
+			, #{cashBuy}
+			, #{cashSELL}
+			, #{dttm}
+			, NOW()
+		)
+	</insert>
+	
+	<!-- 0명 채팅방 제거 -->
+	<delete id="deleteChat">
+	/* deleteChat */
+		DELETE FROM CHAT
+		WHERE CHAT_USR_CNT = 0
+	</delete>
+	
+	<!-- 어제 들어온 마지막 환율 빼고 지우기   -->
+	<delete id="deleteYesterdayExchange">
+	/* deleteYesterdayExchange */
+		DELETE FROM EXCHANGE_RATE
+		WHERE DTTM NOT IN (
+			SELECT * FROM (
+				SELECT
+					MAX(DTTM)
+				FROM EXCHANGE_RATE
+				WHERE DTTM BETWEEN #{value} AND concat(#{value}, ' 23:59:59')
+			) A )	
+			AND DTTM BETWEEN #{value} AND concat(#{value}, ' 23:59:59')
+	</delete>
+	
+	<!-- 날짜지난 멤버십 포인트 0  -->
+	<update id="updateMemberCostZero">
+	/* updateMemberCostZero */
+		UPDATE MEMBER_ACTIVE
+			SET USE_COST = 0
+		WHERE DATE_FORMAT(DUE_DTTM, '%Y.%m.%d') = #{value}
+	</update>
+	
+	<!-- 날짜지난 멤버십 포인트 0  -->
+	<update id="updateMemberCost">
+	/* updateMemberCost */
+		UPDATE MEMBER M, (SELECT
+			MEMBER_ID
+			, SUM(USE_COST) COST
+		FROM MEMBER_ACTIVE
+		WHERE TP IN ('N', 'C', 'E')
+		GROUP BY MEMBER_ID) MA
+			SET M.COST = MA.COST
+		WHERE M.MEMBER_ID = MA.MEMBER_ID
+	</update>
+	
+	
+	<!-- 멤버십 아닌 사용자 리스트 -->
+	<select id="selectNoMemberList" resultType="int">
+	/* selectNoMemberList */
+		SELECT
+			U.USR_ID
+		FROM USER U
+		LEFT OUTER JOIN MEMBER M ON U.USR_ID = M.USR_ID
+		WHERE U.USR_ST = 'Y'
+			AND M.MEMBER_ID IS NULL
+		GROUP BY U.USR_TEL
+		ORDER BY U.USR_ID DESC
+	</select>
+	
+	<!-- 멤버십 가입 아이디 여부 확인 -->
+	<select id="selectCheckMem" resultType="int">
+	/* selectCheckMem */
+		SELECT
+			COUNT(M.MEMBER_ID)
+		FROM USER U
+		LEFT OUTER JOIN MEMBER M ON U.USR_ID = M.USR_ID
+		WHERE U.USR_TEL IN (
+			SELECT
+				USR_TEL
+			FROM USER
+			WHERE USR_ID = #{value}
+		)
+	</select>
+	
+	<!-- 바코드 중복 체크 -->
+	<select id="selectMemberBarcodeCnt" resultType="int">
+	/* selectMemberBarcodeCnt */
+		SELECT
+			COUNT(MEMBER_ID)
+		FROM MEMBER
+		WHERE BARCODE = #{value}
+	</select>
+	
+	<!-- 멤버십 등록 -->
+	<insert id="insertMemberInfo">
+	/* insertMemberInfo */
+		INSERT INTO MEMBER(
+			USR_ID
+			, BARCODE
+			, BARCODE_URL
+			, START_DT
+			, END_DT
+			, COST
+			, LIMIT_AMNT
+		) VALUES (
+			#{usrId}
+			, #{barcode}
+			, #{barcodeUrl}
+			, NOW()
+			, #{endDt}
+			, #{cost}
+			, #{cost}
+		)
+	</insert>
+	
+	<!-- 멤버십 연장을 -->
+	<insert id="insertMemberActive">
+	/* insertMemberActive */
+		INSERT INTO MEMBER_ACTIVE(
+			MEMBER_ID
+			, TP
+			, REG_DTTM
+			, ADD_COST
+			, USE_COST
+			, DUE_DTTM
+		)
+		SELECT
+			M.MEMBER_ID
+			, 'N'
+			, NOW()
+			, M.COST
+			, M.COST
+			, #{endDt}
+		FROM MEMBER M
+		WHERE M.USR_ID = #{usrId}
+	</insert>
+	
+	<!-- 멤버십, 예약 가상계좌 푸시 발송 -->
+	<select id="selectVbFinUuid" resultType="map">
+	/* selectVbFinUuid */
+		SELECT
+			UUID
+			, OS
+		FROM USER_TOKEN
+		WHERE USR_ID = #{value}
+	</select>
+	
+	<!-- 최신 환율 정보 -->
+	<select id="selectExcList" resultType="map">
+	/* selectExcList */
+		SELECT
+			A.UNIT
+			, A.BASIC_RATE F_RATE
+			, B.BASIC_RATE S_RATE
+		FROM (
+			SELECT
+				UNIT
+				, BASIC_RATE
+			FROM EXCHANGE_RATE
+			WHERE DTTM = (
+			SELECT
+				MAX(DTTM)
+			FROM EXCHANGE_RATE)
+		) A 
+		INNER JOIN (
+			SELECT
+				UNIT
+				, BASIC_RATE
+			FROM EXCHANGE_RATE
+			WHERE DTTM = (
+			SELECT 
+				DTTM
+			FROM EXCHANGE_RATE
+			GROUP BY DTTM
+			ORDER BY DTTM DESC
+			LIMIT 1 OFFSET 1			
+			)
+		) B ON A.UNIT = B.UNIT
+	</select>
+	
+	<!-- 알람 받을 사용자 정보 -->
+	<select id="selectAlrmUsrList" resultType="string">
+	/* selectAlrmUsrList */
+		SELECT
+			T.UUID
+		FROM USER_EXC_ALRM U, USER_TOKEN T
+		WHERE U.ALRM_ST = 'Y'
+			AND U.UNIT = #{UNIT}
+			AND U.ALRM_RATE #{F_RATE} AND #{S_RATE}
+			AND U.USR_ID = T.USR_ID
+			AND T.OS = #{os}
+			AND T.UUID IS NOT NULL
+			AND T.UUID != ''
+	</select>
+	
+	<!-- 알람 받은 사용자 알람 끔 -->
+	<update id="updateAlrmSt">
+	/* updateAlrmSt */
+		UPDATE USER_EXC_ALRM U, (
+				SELECT
+					UEA_ID
+				FROM USER_EXC_ALRM
+				WHERE ALRM_ST = 'Y'
+					AND UNIT = #{UNIT}
+					AND ALRM_RATE &gt;= #{BASIC_RATE}
+			) A
+			SET U.ALRM_ST = 'N'
+		WHERE U.UEA_ID = A.UEA_ID
+	</update>
+	
+	<!-- 환율 도달 알람 등록 -->
+	<insert id="insertAlarm">
+	/* insertAlarm */
+		INSERT INTO ALARM(
+			USR_ID
+			, ARM_TP
+			, ARM_ST
+			, ARM_TITLE
+			, ARM_TARGET
+			, ARM_VAL
+			, REG_DTTM
+		) 
+		SELECT
+			USR_ID
+			, #{armTp}
+			, 'N'
+			, #{armTitle}
+			, #{armTarget}
+			, #{armVal}
+			, NOW()
+		FROM USER_EXC_ALRM
+		WHERE ALRM_ST = 'Y'
+			AND UNIT = #{UNIT}
+			AND ALRM_RATE &gt;= #{BASIC_RATE}
+	</insert>
+	
+	<!-- 내일 예약자 컨텐츠 푸시 -->
+	<select id="selectTomorwRsv" resultType="string">
+	/* selectTomorwRsv */
+		SELECT
+			U.UUID
+		FROM RSV R, USER_TOKEN U
+		WHERE R.RSV_DT = #{dt}
+			AND R.RSV_ST = 'R'
+			AND R.USR_ID = U.USR_ID
+			AND U.PUSH_ST = 'Y'
+			AND U.OS = #{os}
+	</select>
+	
+	<!-- 현금 시제 등록 -->
+	<insert id="insertCashInfo" useGeneratedKeys="true" keyProperty="cashId">
+	/* insertCashInfo */
+		INSERT INTO CASH_INFO(
+			DT
+			, REG_DTTM
+		) VALUES (
+			#{dt}
+			, NOW()
+		)
+	</insert>
+	
+	<!-- 현금 시제 등록 -->
+	<insert id="insertCashLog">
+	/* insertCashLog */
+		INSERT INTO CASH_LOG(
+			CASH_ID
+			, UNIT
+			, A_CAGE
+			, B_CAGE
+			, RSV_AMNT
+			, BASIC_RATE
+		)
+		SELECT
+			#{cashId}
+			, A.UNIT
+			, A.A_AMNT
+			, B.B_AMNT
+			, R.RSV_AMNT
+			, E.BASIC_RATE
+		FROM (
+			SELECT
+				UNIT
+				, SUM(PAPER * AMNT) A_AMNT
+			FROM GOLD_INFO
+			WHERE STORE_ID = 1
+			GROUP BY UNIT
+		) A
+		INNER JOIN (
+			SELECT
+				UNIT
+				, SUM(PAPER * AMNT) B_AMNT
+			FROM GOLD_INFO
+			WHERE STORE_ID = 5
+			GROUP BY UNIT
+		) B ON A.UNIT = B.UNIT
+		LEFT OUTER JOIN (
+			SELECT
+				UNIT
+				, BASIC_RATE
+			FROM EXCHANGE_RATE
+			WHERE DTTM = (
+			SELECT
+				MAX(DTTM)
+			FROM EXCHANGE_RATE)
+		) E ON A.UNIT = E.UNIT
+		LEFT OUTER JOIN (
+		SELECT
+			UNIT
+			, SUM(RSV_AMNT) RSV_AMNT
+		FROM RSV
+		WHERE RSV_ST = 'R'
+			AND ADMIN_ST = 'N'
+			AND RSV_DT &gt; NOW()
+		GROUP BY UNIT
+		) R ON A.UNIT = R.UNIT
+	</insert>
+	
+	<!-- 센터 로그아웃 -->
+	<update id="updateCenterLogout">
+	/* updateCenterLogout */
+		UPDATE STORE S, ADMIN_STORE AST, ADMIN A, ADMIN_TOKEN AT
+			SET AT.TOKEN_ADM = NULL
+				, AT.TOKEN_EXPIRE_DTTM = NOW()
+		WHERE S.STORE_CENTER = 'Y'
+			AND S.STORE_ID = AST.STORE_ID
+			AND AST.ADMIN_KEY = A.ADMIN_KEY
+			AND A.ADMIN_TP = 'M'
+			AND A.ADMIN_KEY = AT.ADMIN_KEY
+	</update>
+	
+	<!-- 미 회수건 처리 -->
+	<update id="updateCenterReturn">
+	/* updateCenterReturn */
+		UPDATE RSV_GROUP G, RSV_GROUP_LOG L, RSV R
+			SET L.GRP_ST = 'M'
+		WHERE G.RSV_DT = #{dt}
+			AND G.GROUP_TP = 'D'
+			AND G.GROUP_ID = L.GROUP_ID
+			AND L.RSV_ID = R.RSV_ID
+			AND R.RSV_ST = 'R'
+	</update>
+	
+</mapper>

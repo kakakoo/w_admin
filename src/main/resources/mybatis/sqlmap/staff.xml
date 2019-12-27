@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.i4unetworks.weys.staff.StaffDao">
+
+	<!-- 인수인계 목록 -->
+	<select id="selectLogHist" resultType="staffVO">
+		/* selectLogHist */
+		SELECT
+			CASE WHEN AL.ACT = 'TLI' THEN '인수인계' ELSE '인수자' END ACT
+			, DATE_FORMAT(AL.REG_DTTM, '%Y.%m.%d %H:%i') REG_DTTM
+			, REPLACE(AL.MEMO, '\n', ' / ') MEMO
+			, A.ADMIN_NAME
+		FROM ADMIN_LOG AL, ADMIN A
+		WHERE AL.ADMIN_KEY = A.ADMIN_KEY
+			AND AL.ACT IN ('TLI', 'TLO')
+		ORDER BY AL.REG_DTTM DESC
+		LIMIT #{pageSize} OFFSET #{searchPage}
+	</select>
+
+	<!-- 인수인계 목록  -->
+	<select id="selectLogHistCnt" resultType="int">
+		/* selectLogHistCnt */
+		SELECT
+			COUNT(ACT)
+		FROM ADMIN_LOG
+		WHERE ACT IN ('TLI', 'TLO')
+	</select>
+	
+	<!-- 담당자 공지사항 -->
+	<select id="selectStaffNotice" resultType="staffVO">
+		/* selectStaffNotice */
+		SELECT
+			AN_ID
+			, AN_TITLE
+			, AN_ST
+			, DATE_FORMAT(REG_DTTM, '%Y.%m.%d %H:%i') REG_DTTM
+		FROM ADMIN_NOTICE
+		ORDER BY AN_ID DESC
+		LIMIT #{pageSize} OFFSET #{searchPage}
+	</select>
+
+	<!-- 담당자 공지사항  -->
+	<select id="selectStaffNoticeCnt" resultType="int">
+		/* selectStaffNoticeCnt */
+		SELECT
+			COUNT(AN_ID)
+		FROM ADMIN_NOTICE
+	</select>
+	
+	<!-- 담당자 공지사항 -->
+	<select id="selectNoticeInfo" resultType="staffVO">
+		/* selectNoticeInfo */
+		SELECT
+			AN_ID
+			, AN_TITLE
+			, AN_DESC
+			, AN_ST
+		FROM ADMIN_NOTICE
+		WHERE AN_ID = #{value}
+	</select>
+	
+	<!-- 담당자 공지사항 등록 -->
+	<insert id="insertNotice">
+		/* insertNotice */
+		INSERT INTO ADMIN_NOTICE(
+			AN_TITLE
+			, AN_DESC
+			, AN_ST
+			, REG_DTTM
+		) VALUES (
+			#{anTitle}
+			, #{anDesc}
+			, 'Y'
+			, NOW()
+		)
+	</insert>
+	
+	<!-- 담당자 공지사항 업데이트 -->
+	<update id="updateNotice">
+		/* updateNotice */
+		UPDATE ADMIN_NOTICE
+			SET	AN_TITLE = #{anTitle}
+				, AN_DESC = #{anDesc}
+				, AN_ST = #{anSt}
+				, MOD_DTTM = NOW()
+		WHERE AN_ID = #{anId}
+	</update>
+	
+	<!-- 담당자 공지사항 삭제 -->
+	<delete id="deleteNoticeLog">
+		/* deleteNoticeLog */
+		DELETE FROM ADMIN_NOTICE_READ
+		WHERE AN_ID = #{value}
+	</delete>
+	
+	<!-- 담당자 공지사항 삭제 -->
+	<delete id="deleteNotice">
+		/* deleteNotice */
+		DELETE FROM ADMIN_NOTICE
+		WHERE AN_ID = #{value}
+	</delete>
+	
+</mapper>

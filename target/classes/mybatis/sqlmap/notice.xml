@@ -1,0 +1,268 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.i4unetworks.weys.notice.NoticeDao">
+
+	<!-- 공지사항 리스트 -->
+	<select id="selectNoticeList" resultType="noticeDetailVO">
+		/* selectNoticeList */
+		SELECT
+			NOTICE_ID
+			, NOTICE_TITLE
+			, NOTICE_CONTENT
+			, DATE_FORMAT(NOTICE_REG_DTTM, '%Y.%m.%d %H:%i') NOTICE_REG_DTTM
+			, IFNULL(DATE_FORMAT(NOTICE_MOD_DTTM, '%Y.%m.%d %H:%i'), '') NOTICE_MOD_DTTM
+			, CASE WHEN NOTICE_ST = 'Y' THEN 'ON' ELSE 'OFF' END AS NOTICE_ST
+		FROM NOTICE
+		ORDER BY NOTICE_ID DESC
+		LIMIT #{pageSize} OFFSET #{searchPage}
+	</select>
+
+	<!-- 공지사항 전체 수  -->
+	<select id="selectNoticeListCnt" resultType="int">
+		/* selectNoticeListCnt */
+		SELECT
+			COUNT(NOTICE_ID)
+		FROM NOTICE
+	</select>
+	
+	<!-- 담당자 공지사항 리스트 -->
+	<select id="selectAdminList" resultType="noticeDetailVO">
+		/* selectAdminList */
+		SELECT
+			AN_ID NOTICE_ID
+			, AN_TITLE NOTICE_TITLE
+			, AN_DESC NOTICE_CONTENT
+			, DATE_FORMAT(REG_DTTM, '%Y.%m.%d %H:%i') NOTICE_REG_DTTM
+			, IFNULL(DATE_FORMAT(MOD_DTTM, '%Y.%m.%d %H:%i'), '') NOTICE_MOD_DTTM
+			, CASE WHEN AN_ST = 'Y' THEN 'ON' ELSE 'OFF' END AS NOTICE_ST
+		FROM ADMIN_NOTICE
+		ORDER BY AN_ID DESC
+		LIMIT #{pageSize} OFFSET #{searchPage}
+	</select>
+	
+	<!-- 공지사항 전체 수  -->
+	<select id="selectAdminListCnt" resultType="int">
+		/* selectAdminListCnt */
+		SELECT
+			COUNT(AN_ID)
+		FROM ADMIN_NOTICE
+	</select>
+	
+	<!-- 공지사항 상태 변경  -->
+	<update id="updateStatus">
+		/* updateStatus */
+		UPDATE NOTICE
+			SET NOTICE_ST = #{noticeSt}
+				, NOTICE_MOD_DTTM = NOW()
+		WHERE NOTICE_ID = #{noticeId}
+	</update>
+	
+	<!-- 공지사항 상태 변경  -->
+	<update id="updateStatusAdmin">
+		/* updateStatusAdmin */
+		UPDATE ADMIN_NOTICE
+			SET AN_ST = #{noticeSt}
+				, MOD_DTTM = NOW()
+		WHERE AN_ID = #{noticeId}
+	</update>
+	
+	<!-- 공지사항 등록 -->
+	<insert id="insertNotice">
+		/* insertNotice */
+		INSERT INTO NOTICE (
+			NOTICE_TITLE
+			, NOTICE_CONTENT
+			, NOTICE_REG_DTTM
+		 ) VALUES (
+			#{noticeTitle}
+			, #{noticeContent}
+			, NOW()
+		)
+	</insert>
+	
+	<!-- 담당자 공지사항 등록 -->
+	<insert id="insertAdminNotice">
+		/* insertAdminNotice */
+		INSERT INTO ADMIN_NOTICE (
+			AN_TITLE
+			, AN_DESC
+			, REG_DTTM
+		 ) VALUES (
+			#{noticeTitle}
+			, #{noticeContent}
+			, NOW()
+		)
+	</insert>
+	
+	<!-- 공지사항 상세 -->
+	<select id="selectNotice" resultType="noticeDetailVO">
+		/* selectNotice */
+		SELECT
+			NOTICE_ID
+			, NOTICE_TITLE
+			, NOTICE_CONTENT
+		FROM NOTICE
+		WHERE NOTICE_ID = #{value}
+	</select>
+	
+	<!-- 담당자 공지사항 상세 -->
+	<select id="selectAdminNotice" resultType="noticeDetailVO">
+		/* selectAdminNotice */
+		SELECT
+			AN_ID NOTICE_ID
+			, AN_TITLE NOTICE_TITLE
+			, AN_DESC NOTICE_CONTENT
+		FROM ADMIN_NOTICE
+		WHERE AN_ID = #{value}
+	</select>
+	
+	<!-- 공지사항 수정 -->
+	<update id="updateNotice">
+		/* updateNotice */
+		UPDATE NOTICE
+			SET NOTICE_TITLE = #{noticeTitle}
+				, NOTICE_CONTENT = #{noticeContent}
+				, NOTICE_MOD_DTTM = NOW()
+		WHERE NOTICE_ID = #{noticeId}
+	</update>
+	
+	<!-- 담당자 공지사항 수정 -->
+	<update id="updateAdminNotice">
+		/* updateAdminNotice */
+		UPDATE ADMIN_NOTICE
+			SET AN_TITLE = #{noticeTitle}
+				, AN_DESC = #{noticeContent}
+				, MOD_DTTM = NOW()
+		WHERE AN_ID = #{noticeId}
+	</update>
+	
+	<!-- 공지사항 삭제 -->
+	<delete id="deleteNotice">
+		/* deleteNotice */
+		DELETE FROM NOTICE
+		WHERE NOTICE_ID = #{value}
+	</delete>
+
+	<!-- 푸쉬 보낼 사용자 리슽   -->
+	<select id="selectAllUsrInfoForPush" resultType="string">
+		/* selectAllUsrInfoForPush */
+		SELECT
+			UUID
+		FROM USER_TOKEN
+		WHERE UUID IS NOT NULL
+			AND PUSH_ST = 'Y'
+			AND UUID != ''
+			AND OS = #{os}
+		UNION ALL
+		SELECT
+			UUID
+		FROM UNKNOWN_TOKEN
+		WHERE OS = #{os}
+			AND PUSH_ST = 'Y'
+			AND UUID IS NOT NULL
+			AND UUID != ''
+	</select>
+	
+	<!-- 푸쉬 보낼 사용자 리슽   -->
+	<select id="selectNoticePush" resultType="string">
+		/* selectNoticePush */
+		SELECT
+			UUID
+		FROM USER_TOKEN
+		WHERE UUID IS NOT NULL
+			AND UUID != ''
+			AND OS = #{os}
+		UNION ALL
+		SELECT
+			UUID
+		FROM UNKNOWN_TOKEN
+		WHERE OS = #{os}
+			AND UUID IS NOT NULL
+			AND UUID != ''
+	</select>
+	
+	<!-- 알람 등록   -->
+	<insert id="insertAlarm">
+		/* insertAlarm */
+		INSERT INTO ALARM(
+			USR_ID
+			, ARM_TP
+			, ARM_ST
+			, ARM_TITLE
+			, ARM_TARGET
+			, ARM_VAL
+			, REG_DTTM
+		)
+		SELECT
+			USR_ID
+			, #{armTp}
+			, 'N'
+			, #{armTitle}
+			, #{armTarget}
+			, #{armVal}
+			, NOW()
+		FROM USER_TOKEN
+		WHERE UUID IS NOT NULL
+			AND PUSH_ST = 'Y'
+			AND UUID != ''
+	</insert>
+	
+	<!-- 커스텀 푸시 -->
+	<select id="selectCustomPush" resultType="string">
+		/* selectCustomPush */
+		SELECT
+			UT.UUID
+		FROM USER U, USER_TOKEN UT
+		WHERE U.USR_ST = 'Y'
+			AND U.USR_ID NOT IN (SELECT USR_ID FROM EVENT_USER WHERE EVENT_ID = #{value})
+			AND U.USR_ID = UT.USR_ID
+			AND UT.OS = #{os}
+			AND UT.UUID != ''
+			AND U.AGREE = 'Y'
+		UNION ALL
+		SELECT
+			UUID
+		FROM UNKNOWN_TOKEN
+		WHERE OS = #{os}
+			AND PUSH_ST = 'Y'
+			AND UUID IS NOT NULL
+			AND UUID != ''
+	</select>
+	
+	<!-- 컨텐츠 푸시 -->
+	<select id="selectUsrUidCont" resultType="string">
+		/* selectUsrUidCont */
+		SELECT
+			UT.UUID
+		FROM RSV R, USER_TOKEN UT
+		WHERE R.USR_ID = UT.USR_ID
+			AND R.RSV_DT = #{dt}
+			AND R.RSV_ST = #{rsvSt}
+			AND UT.PUSH_ST = 'Y'
+			AND UT.UUID != ''
+			AND UT.OS = #{os}
+		GROUP BY UT.UUID
+	</select>
+	
+	<!-- 컨텐츠 푸시 -->
+	<select id="selectUsrUidContAll" resultType="string">
+		/* selectUsrUidContAll */
+		SELECT
+			UT.UUID
+		FROM USER U, USER_TOKEN UT
+		WHERE U.USR_ST = 'Y'
+			AND U.USR_ID = UT.USR_ID
+			AND UT.OS = #{os}
+			AND UT.UUID != ''
+			AND UT.PUSH_ST = 'Y'
+		UNION ALL
+		SELECT
+			UUID
+		FROM UNKNOWN_TOKEN
+		WHERE OS = #{os}
+			AND PUSH_ST = 'Y'
+			AND UUID IS NOT NULL
+			AND UUID != ''
+	</select>
+	
+</mapper>

@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.i4unetworks.weys.unit.UnitDao">
+
+	<!-- 통화 관리 리스트  -->
+	<select id="getStoreUnitList" resultType="unitListVO">
+		/* getStoreUnitList */
+		SELECT
+			UNIT_ID
+			, UNIT_NM
+			, UNIT_CD
+			, RSV_ST
+			, IFNULL(UNIT_SIZE, 0) UNIT_SIZE
+			, IFNULL(UNIT_MIN, 0) UNIT_MIN
+			, IFNULL(WEYS_COMMIS, 0) WEYS_COMMIS
+			, IFNULL(UNIT_COMMIS, 0) UNIT_COMMIS
+			, IFNULL(AIR_COMMIS, 0) AIR_COMMIS
+		FROM UNIT
+		WHERE UNIT_ST = 'Y'
+		ORDER BY CASE WHEN RSV_ST = 'Y' THEN 1 WHEN RSV_ST = 'R' THEN 2 ELSE 3 END, UNIT_SEQ
+	</select>
+	
+	<!-- 통화 업데이트 -->
+	<update id="updateStoreUnit">
+		/* updateStoreUnit */
+		UPDATE UNIT
+			SET RSV_ST = #{rsvSt}
+				, UNIT_SIZE = #{unitSize}
+				, UNIT_MIN = #{unitMin}
+				, WEYS_COMMIS = #{weysCommis}
+				, UNIT_COMMIS = #{unitCommis}
+				, AIR_COMMIS = #{airCommis}
+		WHERE UNIT_ID = #{unitId}
+	</update>
+	
+	<!-- 예약지점 리스트 -->
+	<select id="selectRsvStore" resultType="map">
+		/* selectRsvStore */
+		SELECT
+			STORE_ID
+			, STORE_NM
+		FROM STORE
+		WHERE STORE_ST = 'Y'
+			AND STORE_RSV = 'Y'
+	</select>
+	
+	<!-- 예약지점 리스트 -->
+	<select id="selectRsvStoreUnit" resultType="map">
+		/* selectRsvStoreUnit */
+		SELECT
+			U.UNIT_CD
+			, IFNULL(R.UNIT_ST, 'N') UNIT_ST
+			, U.UNIT_ID
+		FROM UNIT U
+		LEFT OUTER JOIN RSV_UNIT R ON U.UNIT_ID = R.UNIT_ID AND R.STORE_ID = #{value}
+		WHERE U.RSV_ST = 'Y'
+	</select>
+	
+	<!-- 지점별 예약 정보 -->
+	<insert id="insertUpdateRsvStore">
+	/* insertUpdateRsvStore */
+		INSERT INTO RSV_UNIT(
+			STORE_ID
+			, UNIT_ID
+			, UNIT_ST
+		) VALUES (
+			#{storeId}
+			, #{unitId}
+			, 'Y'
+		)
+		ON DUPLICATE KEY UPDATE
+			UNIT_ST = 'Y'
+	</insert>
+	
+	<!-- 지점별 예약 정보 초기화 -->
+	<update id="updateRsvUnitInit">
+	/* updateRsvUnitInit */
+		UPDATE RSV_UNIT
+			SET UNIT_ST = 'N'
+		WHERE STORE_ID = #{value}
+	</update>
+	
+</mapper>

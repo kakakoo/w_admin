@@ -1,0 +1,1157 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.i4unetworks.weys.manage.ManageDao">
+
+	<!-- 지점 멤버십 거래 현황 -->
+	<select id="getManageInfoMembership" resultType="memberListVO">
+		/* getManageInfoMembership */
+		SELECT
+			SUM(A.bCnt) bCnt
+			, SUM(A.payAmnt) payAmnt
+			, SUM(A.sCnt) sCnt
+			, SUM(A.getAmnt) getAmnt
+			, CONCAT(A.UNIT, '/', U.UNIT_NM) UNIT_NM
+		FROM (
+			SELECT 
+				UNIT
+				, COUNT(UNIT) bCnt	
+				, SUM(PAY_AMNT) payAmnt
+				, 0 sCnt
+				, 0 getAmnt
+			FROM MEMBER_ACTIVE
+			WHERE STORE_ID = #{storeId}
+				AND TP='B'
+				AND REG_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+			GROUP BY UNIT
+			UNION ALL
+			SELECT 
+				UNIT
+				, 0 bCnt
+				, 0 payAmnt
+				, COUNT(UNIT) sCnt	
+				, SUM(GET_AMNT) getAmnt
+			FROM MEMBER_ACTIVE
+			WHERE STORE_ID = #{storeId}
+				AND TP='S'
+				AND REG_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+			GROUP BY UNIT) A, UNIT U
+		WHERE A.UNIT = U.UNIT_CD
+		GROUP BY A.UNIT
+	</select>
+
+	<!-- 지점 포인트 거래 현황 -->
+	<select id="getManageInfoPoint" resultType="memberListVO">
+		/* getManageInfoPoint */
+		SELECT
+			CONCAT(P.UNIT, '/', U.UNIT_NM) UNIT_NM
+			, COUNT(P.UNIT) sCnt
+			, SUM(P.GET_AMNT) GET_AMNT
+		FROM POINT P, UNIT U
+		WHERE P.UNIT = U.UNIT_CD
+			AND P.STORE_ID = #{storeId}
+			AND P.POINT_TP = 'C'
+			AND P.REG_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+	</select>
+
+	<!-- 지점별 거래현황 상세 리스트 -->
+	<select id="selectActiveList" resultType="activeListVO">
+		/* selectActiveList */
+		SELECT
+			A.*
+		FROM (
+			SELECT
+				DATE_FORMAT(MA.REG_DTTM, '%Y.%m.%d %H:%i') REG_DTTM
+				, CASE WHEN MA.MEMBER_ID IS NULL THEN '비멤버십' ELSE '멤버십' END TYPE
+				, CASE WHEN MA.TP='B' THEN '구매' ELSE '판매' END TP
+				, MA.UNIT
+				, CASE WHEN MA.TP='S' THEN MA.GET_AMNT ELSE MA.PAY_AMNT END GET_AMNT
+				, MA.BASIC_RATE
+				, CASE WHEN MA.TP='S' THEN MA.PAY_AMNT 
+						WHEN MA.MEMBER_ID IS NULL THEN MA.GET_AMNT ELSE MA.ADD_COST END PAY_AMNT
+				, CASE WHEN MA.MEMBER_ID IS NULL THEN CAST(AES_DECRYPT(MA.S_NM, SHA2(#{encKey},512)) AS CHAR)
+					ELSE CAST(AES_DECRYPT(U.USR_NM, SHA2(#{encKey},512)) AS CHAR) END USR_NM
+				, MA.PAPER
+			FROM MEMBER_ACTIVE MA
+			LEFT OUTER JOIN MEMBER M ON MA.MEMBER_ID = M.MEMBER_ID
+			LEFT OUTER JOIN USER U ON M.USR_ID = U.USR_ID
+			WHERE MA.TP IN ('S', 'B')
+				AND MA.REG_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+			UNION ALL
+			SELECT
+				DATE_FORMAT(P.REG_DTTM, '%Y.%m.%d %H:%i') REG_DTTM
+				, '포인트' TYPE
+				, '전환' TP
+				, P.UNIT
+				, P.GET_AMNT
+				, P.BASIC_RATE
+				, P.POINT PAY_AMNT
+				, U.USR_NICK
+				, P.PAPER
+			FROM POINT P, USER U
+			WHERE P.USR_ID = U.USR_ID
+				AND P.POINT_TP = 'C'
+				AND P.REG_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+			) A
+		ORDER BY A.REG_DTTM DESC
+		LIMIT #{pageSize} OFFSET #{searchPage}
+	</select>
+	
+	<!-- 지점별 거래현황 상세 리스트 -->
+	<select id="selectActiveListCnt" resultType="int">
+		/* selectActiveListCnt */
+		SELECT
+			COUNT(A.REG_DTTM)
+		FROM (
+			SELECT
+				DATE_FORMAT(MA.REG_DTTM, '%Y.%m.%d %H:%i') REG_DTTM
+				, '멤버십' TYPE
+				, CASE WHEN MA.TP='B' THEN '구매' ELSE '판매' END TP
+				, MA.UNIT
+				, MA.GET_AMNT
+				, MA.BASIC_RATE
+				, MA.PAY_AMNT
+				, U.USR_NICK
+				, MA.PAPER
+			FROM MEMBER_ACTIVE MA
+			LEFT OUTER JOIN MEMBER M ON MA.MEMBER_ID = M.MEMBER_ID
+			LEFT OUTER JOIN USER U ON M.USR_ID = U.USR_ID
+			WHERE MA.TP IN ('S', 'B')
+				AND MA.REG_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+			UNION ALL
+			SELECT
+				DATE_FORMAT(P.REG_DTTM, '%Y.%m.%d %H:%i') REG_DTTM
+				, '포인트' TYPE
+				, '전환' TP
+				, P.UNIT
+				, P.GET_AMNT
+				, P.BASIC_RATE
+				, P.POINT PAY_AMNT
+				, U.USR_NICK
+				, P.PAPER
+			FROM POINT P, USER U
+			WHERE P.USR_ID = U.USR_ID
+				AND P.POINT_TP = 'C'
+				AND P.REG_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+			) A
+	</select>
+	
+	<!-- 거래 등록시 고객 정보 -->
+	<select id="selectClientInfo" resultType="clientInfoVO">
+		/* selectClientInfo */
+		SELECT
+			U.USR_NICK
+			, CAST(AES_DECRYPT(U.USR_NM, SHA2(#{encKey},512)) AS CHAR) USR_NM
+			, CAST(AES_DECRYPT(U.USR_EMAIL, SHA2(#{encKey},512)) AS CHAR) USR_EMAIL
+			, CASE WHEN M.MEMBER_ID IS NULL THEN '' ELSE DATE_FORMAT(M.START_DT, '%Y.%m.%d %H:%i') END START_DT
+			, CASE WHEN M.MEMBER_ID IS NULL THEN '' ELSE DATE_FORMAT(M.END_DT, '%Y.%m.%d') END END_DT
+			, CASE WHEN M.MEMBER_ID IS NULL THEN '' ELSE CONCAT(FORMAT(M.COST, 0), ' / ', FORMAT(M.LIMIT_AMNT, 0)) END LIMIT_AMNT
+			, CASE WHEN M.MEMBER_ID IS NULL THEN '' ELSE M.COST END cost
+		FROM USER U
+		LEFT OUTER JOIN MEMBER M ON U.USR_ID = M.USR_ID
+		WHERE 1=1
+		<if test='type == "point"'>
+			AND U.BARCODE = #{barcode}
+		</if>
+		<if test='type == "member"'>
+			AND M.BARCODE = #{barcode}
+		</if>
+	</select>
+	
+	<!-- 지점 사용 통화 리스트 -->
+	<select id="selectStoreUnit" resultType="unitVO">
+		/* selectStoreUnit */
+		SELECT
+			U.UNIT_CD
+			, U.UNIT_NM
+		FROM STORE_UNIT SU, UNIT U
+		WHERE SU.STORE_ID = #{value}
+			AND SU.UNIT_ID = U.UNIT_ID
+			AND U.UNIT_ST = 'Y'
+	</select>
+	
+	<!-- 통화 매매기준율 -->
+	<select id="selectUnitBasicRate" resultType="string">
+		/* selectUnitBasicRate */
+		SELECT
+			BASIC_RATE
+		FROM EXCHANGE_RATE
+		WHERE UNIT = #{value}
+		ORDER BY DTTM DESC
+		LIMIT 2
+	</select>
+	
+	<!-- 지점 총액 현황 -->
+	<select id="selectStoreUnitAmnt" resultType="string">
+		/* selectStoreUnitAmnt */
+		SELECT 
+			FORMAT(SUM(SC.COIN_CNT * C.COIN_BASIC), 0)
+		FROM STORE_COIN SC, COIN C, UNIT U
+		WHERE SC.STORE_ID = #{storeId}
+			AND SC.COIN_ID = C.COIN_ID
+			AND C.UNIT_ID = U.UNIT_ID
+			AND U.UNIT_CD = #{unitCd}
+	</select>
+	
+	<!-- 지점 금액 종류 -->
+	<select id="selectPayCoinList" resultType="map">
+		/* selectPayCoinList */
+		SELECT
+			CONCAT(C.COIN_NM, '(', SC.COIN_CNT, ')') COIN_NM
+			, C.COIN_BASIC
+			, C.COIN_ID
+		FROM COIN C, STORE_COIN SC, UNIT U
+		WHERE SC.STORE_ID = #{storeId}
+			AND SC.COIN_ID = C.COIN_ID
+			AND C.UNIT_ID = U.UNIT_ID
+			AND U.UNIT_CD = #{unitCd}
+		ORDER BY C.COIN_BASIC DESC
+	</select>
+	
+	<!-- 지점 금액 종류 -->
+	<select id="selectGetCoinList" resultType="map">
+		/* selectGetCoinList */
+		SELECT
+			C.COIN_NM
+			, C.COIN_BASIC
+			, C.COIN_ID
+		FROM COIN C, STORE_COIN SC, UNIT U
+		WHERE SC.STORE_ID = #{storeId}
+			AND SC.COIN_ID = C.COIN_ID
+			AND C.UNIT_ID = U.UNIT_ID
+			AND U.UNIT_CD = #{unitCd}
+			<if test="coinTp != null">
+				AND C.COIN_TP = 'C'
+			</if>
+		ORDER BY C.COIN_BASIC DESC
+	</select>
+	
+	<!-- 멤버십 환전 기록  -->
+	<insert id="insertMemberActive">
+		/* insertMemberActive */
+		INSERT INTO MEMBER_ACTIVE(
+			MEMBER_ID
+			, STORE_ID
+			, ADMIN_ID
+			, GET_AMNT
+			, TP
+			, UNIT
+			, BASIC_RATE
+			, PAPER
+			, PAY_AMNT
+			, REG_DTTM
+		) VALUES(
+			#{memberId}
+			, #{storeId}
+			, #{adminId}
+			, #{getAmnt}
+			, #{tradeType}
+			, #{storeUnit}
+			, #{basicRate}
+			, #{tradePaper}
+			, #{payAmnt}
+			, NOW()
+		)
+	</insert>
+	
+	<!-- 비 멤버십 환전 기록  -->
+	<insert id="insertNoMemberActive">
+		/* insertNoMemberActive */
+		INSERT INTO MEMBER_ACTIVE(
+			STORE_ID
+			, ADMIN_ID
+			, GET_AMNT
+			, TP
+			, UNIT
+			, BASIC_RATE
+			, PAPER
+			, PAY_AMNT
+			, REG_DTTM
+			, NONE_NM
+		) VALUES(
+			#{storeId}
+			, #{adminId}
+			, #{getAmnt}
+			, #{tradeType}
+			, #{storeUnit}
+			, #{basicRate}
+			, #{tradePaper}
+			, #{payAmnt}
+			, NOW()
+			, #{usrNm}
+		)
+	</insert>
+	
+	<!-- 멤버십 사용자 아이디  -->
+	<select id="selectMemberIdFromBarcode" resultType="map">
+		/* selectMemberIdFromBarcode */
+			SELECT
+				MEMBER_ID
+				, COST
+			FROM MEMBER
+			WHERE BARCODE = #{value}
+	</select>
+	
+	<!-- 관리자 아이디  -->
+	<select id="selectAdminKey" resultType="int">
+		/* selectAdminKey */
+			SELECT
+				ADMIN_KEY
+			FROM ADMIN
+			WHERE ADMIN_ID = #{value}
+	</select>
+	
+	<!-- 멤버십 환전 기록  -->
+	<insert id="insertPaperHist">
+		/* insertPaperHist */
+		INSERT INTO PAPER_HIST(
+			PAPER
+			<if test='GET_AMNT1 != null'>, GET_AMNT1</if>
+			<if test='GET_AMNT2 != null'>, GET_AMNT2</if>
+			<if test='GET_AMNT3 != null'>, GET_AMNT3</if>
+			<if test='GET_AMNT4 != null'>, GET_AMNT4</if>
+			<if test='GET_AMNT5 != null'>, GET_AMNT5</if>
+			<if test='GET_AMNT6 != null'>, GET_AMNT6</if>
+			<if test='GET_AMNT7 != null'>, GET_AMNT7</if>
+			<if test='GET_AMNT8 != null'>, GET_AMNT8</if>
+			<if test='GET_AMNT9 != null'>, GET_AMNT9</if>
+			<if test='GET_AMNT10 != null'>, GET_AMNT10</if>
+			<if test='GET_AMNT11 != null'>, GET_AMNT11</if>
+			<if test='GET_AMNT12 != null'>, GET_AMNT12</if>
+			<if test='GET_AMNT13 != null'>, GET_AMNT13</if>
+			<if test='GET_AMNT14 != null'>, GET_AMNT14</if>
+			<if test='PAY_AMNT1 != null'>, PAY_AMNT1</if>
+			<if test='PAY_AMNT2 != null'>, PAY_AMNT2</if>
+			<if test='PAY_AMNT3 != null'>, PAY_AMNT3</if>
+			<if test='PAY_AMNT4 != null'>, PAY_AMNT4</if>
+			<if test='PAY_AMNT5 != null'>, PAY_AMNT5</if>
+			<if test='PAY_AMNT6 != null'>, PAY_AMNT6</if>
+			<if test='PAY_AMNT7 != null'>, PAY_AMNT7</if>
+			<if test='PAY_AMNT8 != null'>, PAY_AMNT8</if>
+			<if test='PAY_AMNT9 != null'>, PAY_AMNT9</if>
+			<if test='PAY_AMNT10 != null'>, PAY_AMNT10</if>
+			<if test='PAY_AMNT11 != null'>, PAY_AMNT11</if>
+			<if test='PAY_AMNT12 != null'>, PAY_AMNT12</if>
+			<if test='PAY_AMNT13 != null'>, PAY_AMNT13</if>
+			<if test='PAY_AMNT14 != null'>, PAY_AMNT14</if>
+			, REG_DTTM
+		) VALUES(
+			#{tradePaper}
+			<if test='GET_AMNT1 != null'>, #{GET_AMNT1}</if>
+			<if test='GET_AMNT2 != null'>, #{GET_AMNT2}</if>
+			<if test='GET_AMNT3 != null'>, #{GET_AMNT3}</if>
+			<if test='GET_AMNT4 != null'>, #{GET_AMNT4}</if>
+			<if test='GET_AMNT5 != null'>, #{GET_AMNT5}</if>
+			<if test='GET_AMNT6 != null'>, #{GET_AMNT6}</if>
+			<if test='GET_AMNT7 != null'>, #{GET_AMNT7}</if>
+			<if test='GET_AMNT8 != null'>, #{GET_AMNT8}</if>
+			<if test='GET_AMNT9 != null'>, #{GET_AMNT9}</if>
+			<if test='GET_AMNT10 != null'>, #{GET_AMNT10}</if>
+			<if test='GET_AMNT11 != null'>, #{GET_AMNT11}</if>
+			<if test='GET_AMNT12 != null'>, #{GET_AMNT12}</if>
+			<if test='GET_AMNT13 != null'>, #{GET_AMNT13}</if>
+			<if test='GET_AMNT14 != null'>, #{GET_AMNT14}</if>
+			<if test='PAY_AMNT1 != null'>, #{PAY_AMNT1}</if>
+			<if test='PAY_AMNT2 != null'>, #{PAY_AMNT2}</if>
+			<if test='PAY_AMNT3 != null'>, #{PAY_AMNT3}</if>
+			<if test='PAY_AMNT4 != null'>, #{PAY_AMNT4}</if>
+			<if test='PAY_AMNT5 != null'>, #{PAY_AMNT5}</if>
+			<if test='PAY_AMNT6 != null'>, #{PAY_AMNT6}</if>
+			<if test='PAY_AMNT7 != null'>, #{PAY_AMNT7}</if>
+			<if test='PAY_AMNT8 != null'>, #{PAY_AMNT8}</if>
+			<if test='PAY_AMNT9 != null'>, #{PAY_AMNT9}</if>
+			<if test='PAY_AMNT10 != null'>, #{PAY_AMNT10}</if>
+			<if test='PAY_AMNT11 != null'>, #{PAY_AMNT11}</if>
+			<if test='PAY_AMNT12 != null'>, #{PAY_AMNT12}</if>
+			<if test='PAY_AMNT13 != null'>, #{PAY_AMNT13}</if>
+			<if test='PAY_AMNT14 != null'>, #{PAY_AMNT14}</if>
+			, NOW()
+		)
+	</insert>
+	
+	<!-- 사용자 아이디  -->
+	<select id="selectUsrIdFromBarcode" resultType="int">
+		/* selectUsrIdFromBarcode */
+		SELECT
+			USR_ID
+		FROM USER
+		WHERE BARCODE = #{value}
+	</select>
+	
+	<!-- 사용자 포인트 전환 내역 추가  -->
+	<insert id="insertPointActive">
+		/* insertPointActive */
+		INSERT INTO POINT(
+			USR_ID
+			, STORE_ID 
+			, POINT
+			, POINT_TP
+			, MEMO
+			, GET_AMNT
+			, BASIC_RATE
+			, PAPER
+			, ADMIN_ID
+			, UNIT
+			, REG_DTTM
+		) VALUES (
+			#{usrId}
+			, #{storeId}
+			, #{point}
+			, 'C'
+			, '포인트 전환'
+			, #{getAmnt}
+			, #{basicRate}
+			, #{tradePaper}
+			, #{adminId}
+			, #{storeUnit}
+			, NOW()
+		)
+	</insert>
+	
+	<!-- 사용자 포인트 전환 내역 추가  -->
+	<update id="updateUsrPoint">
+		/* updateUsrPoint */
+		UPDATE USER
+			SET USR_POINT = USR_POINT + #{point}
+		WHERE USR_ID = #{usrId}
+	</update>
+	
+	<!-- 상점 코인 갯수 가져오기   -->
+	<select id="selectStoreCoinList" resultType="map">
+		/* selectStoreCoinList */
+		SELECT
+			SC.STORE_ID
+			, SC.COIN_ID
+			, SC.COIN_CNT
+		FROM STORE_COIN SC, COIN C, UNIT U
+		WHERE SC.STORE_ID = #{storeId}
+			AND SC.COIN_ID = C.COIN_ID
+			AND C.UNIT_ID = U.UNIT_ID
+			AND U.UNIT_CD = #{storeUnit}
+			<if test="coinTp != null">
+			AND C.COIN_TP = 'C'
+			</if>
+		ORDER BY C.COIN_BASIC DESC
+	</select>
+	
+	<!-- 상점 코인 갯수 업데이트   -->
+	<update id="updateStoreCoin">
+		/* updateStoreCoin */
+		UPDATE STORE_COIN
+			SET COIN_CNT = #{COIN_CNT}
+		WHERE STORE_ID = #{STORE_ID}
+			AND COIN_ID = #{COIN_ID}
+	</update>
+	
+	<!-- 거래현황 정보 가져오기 -->
+	<select id="selectMemberActive" resultType="map">
+		/* selectMemberActive */
+		SELECT
+			TP
+			, UNIT
+			, GET_AMNT
+			, PAY_AMNT
+			, MEMBER_ID
+		FROM MEMBER_ACTIVE
+		WHERE PAPER = #{value}
+	</select>
+	
+	<!-- 거래현황 정보 가져오기 -->
+	<select id="selectPointActive" resultType="map">
+		/* selectPointActive */
+		SELECT
+			USR_ID
+			, POINT
+			, UNIT
+		FROM POINT
+		WHERE PAPER = #{value}
+	</select>
+	
+	<!-- 거래현황 정보 가져오기 -->
+	<select id="selectPaperHist" resultType="map">
+		/* selectPaperHist */
+		SELECT
+			*
+		FROM PAPER_HIST
+		WHERE PAPER = #{value}
+	</select>
+	
+	<!-- 포인트 복구하기  -->
+	<update id="updateReturnPoint">
+		/* updateReturnPoint */
+		UPDATE USER
+			SET USR_POINT = USR_POINT - #{POINT}
+		WHERE USR_ID = #{USR_ID}
+	</update>
+	
+	<!-- 거래내역 삭제  -->
+	<delete id="deleteMemberActive">
+		/* deleteMemberActive */
+		DELETE FROM MEMBER_ACTIVE
+		WHERE PAPER = #{value}
+	</delete>
+	
+	<!-- 거래내역 삭제  -->
+	<delete id="deletePointActive">
+		/* deletePointActive */
+		DELETE FROM POINT
+		WHERE PAPER = #{value}
+	</delete>
+	
+	<!-- 사용자 이름 업데이트  -->
+	<update id="insertMemberUsrNm">
+		/* insertMemberUsrNm */
+		UPDATE USER U, MEMBER M
+			SET U.USR_NM = #{usrNm}
+		WHERE M.USR_ID = U.USR_ID
+			AND M.MEMBER_ID = #{memberId}
+	</update>
+	
+	<!-- 사용자 이름 업데이트  -->
+	<update id="insertPointUsrNm">
+		/* insertPointUsrNm */
+		UPDATE USER
+			SET USR_NM = #{usrNm}
+		WHERE USR_ID =  #{usrId}
+	</update>
+	
+	<!-- 사용자 포인트 업데이트  -->
+	<update id="updateMemberPoint">
+		/* updateMemberPoint */
+		UPDATE MEMBER
+			SET COST = COST - #{val}
+		WHERE MEMBER_ID =  #{memberId}
+	</update>
+	
+	<select id="selectUsdRate" resultType="double">
+		/* selectUsdRate */
+		SELECT
+			BASIC_RATE
+		FROM EXCHANGE_RATE
+		WHERE UNIT = 'USD'
+			AND DTTM IN (
+				SELECT
+					MAX(DTTM)
+				FROM EXCHANGE_RATE
+			)
+	</select>
+	
+	<!-- 멤버십 거래 취소시 복귀  -->
+	<update id="returnMemberCost">
+		/* returnMemberCost */
+		UPDATE MEMBER
+			SET COST = COST + #{val}
+		WHERE MEMBER_ID = #{memberId}
+	</update>
+	
+	<!-- 신청서 중복 확인  -->
+	<select id="checkPaper" resultType="int">
+		/* checkPaper */
+		SELECT
+			SUM(A.PAPER)
+		FROM(
+		SELECT
+			COUNT(PAPER) PAPER
+		FROM MEMBER_ACTIVE
+		WHERE PAPER=#{value}
+		UNION ALL
+		SELECT
+			COUNT(PAPER) PAPER
+		FROM POINT
+		WHERE PAPER=#{value}) A
+	</select>
+	
+	<!-- 거래액 가능 확인 -->
+	<select id="checkCost" resultType="int">
+		/* checkCost */
+		SELECT
+			COST
+		FROM MEMBER
+		WHERE BARCODE = #{barcode}
+	</select>
+	
+	<!-- 해당 통화 스프레드 -->
+	<select id="selectUnitCommis" resultType="double">
+		/* selectUnitCommis */
+		SELECT
+			UNIT_COMMIS
+		FROM UNIT
+		WHERE UNIT_CD = #{value}
+	</select>
+	
+	<!-- 지점 통화 보유량 -->
+	<select id="selectStoreCoin" resultType="map">
+		/* selectStoreCoin */
+		SELECT
+			A.COIN_ID
+			, A.COIN_NM
+			, A.UNIT_ID
+			, A.COIN_BASIC
+			, A.UNIT_NM
+			, A.UNIT_CD
+			, A.UNIT_CNT
+			, A.SAFE_CNT
+			, A.SAFE_VAL
+			, A.R_VAL
+			, A.S_VAL
+			, A.I_VAL
+			, A.BASIC_RATE
+		FROM (
+				SELECT
+					SC.COIN_ID
+					, C.COIN_NM 
+					, C.UNIT_ID
+					, C.COIN_BASIC
+					, U.UNIT_NM
+					, U.UNIT_CD
+					, UC.UNIT_CNT
+					, IFNULL(SB.COIN_CNT, 0) SAFE_CNT
+					, IFNULL(C.COIN_BASIC * SB.COIN_CNT, 0) SAFE_VAL
+					, 0 R_VAL
+					, 0 S_VAL
+					, 0 I_VAL
+					, 0 BASIC_RATE
+					, U.UNIT_SEQ
+				FROM STORE S
+				INNER JOIN STORE_COIN SC ON S.STORE_ID = SC.STORE_ID
+				INNER JOIN COIN C ON SC.COIN_ID = C.COIN_ID
+				INNER JOIN UNIT U ON C.UNIT_ID = U.UNIT_ID
+				LEFT OUTER JOIN SAFE_BOX SB ON S.STORE_ID = SB.STORE_ID AND C.COIN_ID = SB.COIN_ID
+				INNER JOIN (
+					SELECT COUNT(UNIT_ID) UNIT_CNT, UNIT_ID FROM COIN GROUP BY UNIT_ID
+				) UC ON C.UNIT_ID = UC.UNIT_ID
+				WHERE S.STORE_ID = #{value}	
+				UNION ALL
+				SELECT
+					99999 COIN_ID
+					, '합계' COIN_NM 
+					, C.UNIT_ID
+					, 99999 COIN_BASIC
+					, U.UNIT_NM
+					, U.UNIT_CD
+					, 0 UNIT_CNT
+					, SUM(IFNULL(SB.COIN_CNT, 0)) SAFE_CNT
+					, SUM(IFNULL(C.COIN_BASIC * SB.COIN_CNT, 0)) SAFE_VAL
+					, SR.AMNT R_VAL
+					, SS.AMNT S_VAL
+					, SI.AMNT I_VAL
+					, IFNULL(BR.BASIC_RATE, 0) BASIC_RATE
+					, U.UNIT_SEQ
+				FROM STORE S
+				INNER JOIN STORE_COIN SC ON S.STORE_ID = SC.STORE_ID
+				INNER JOIN COIN C ON SC.COIN_ID = C.COIN_ID
+				INNER JOIN UNIT U ON C.UNIT_ID = U.UNIT_ID
+				LEFT OUTER JOIN SAFE_BOX SB ON S.STORE_ID = SB.STORE_ID AND C.COIN_ID = SB.COIN_ID
+				INNER JOIN (
+					SELECT COUNT(UNIT_ID) UNIT_CNT, UNIT_ID FROM COIN GROUP BY UNIT_ID
+				) UC ON C.UNIT_ID = UC.UNIT_ID
+				INNER JOIN (
+					SELECT
+						STORE_ID
+						, UNIT_ID
+						, AMNT
+					FROM STORE_MONEY
+					WHERE TYPE = 'R'
+				) SR ON S.STORE_ID = SR.STORE_ID AND C.UNIT_ID = SR.UNIT_ID
+				INNER JOIN (
+					SELECT
+						STORE_ID
+						, UNIT_ID
+						, AMNT
+					FROM STORE_MONEY
+					WHERE TYPE = 'S'
+				) SS ON S.STORE_ID = SS.STORE_ID AND C.UNIT_ID = SS.UNIT_ID
+				INNER JOIN (
+					SELECT
+						STORE_ID
+						, UNIT_ID
+						, AMNT
+					FROM STORE_MONEY
+					WHERE TYPE = 'I'
+				) SI ON S.STORE_ID = SI.STORE_ID AND C.UNIT_ID = SI.UNIT_ID
+				LEFT OUTER JOIN (
+					SELECT
+						UNIT
+						, BASIC_RATE
+				FROM EXCHANGE_RATE
+				WHERE DTTM = (SELECT 
+					MAX(DTTM) DT 
+				FROM EXCHANGE_RATE)
+					AND UNIT IN ('USD', 'JPY', 'EUR', 'CNY')
+				) BR ON U.UNIT_CD = BR.UNIT
+				WHERE S.STORE_ID = #{value}
+				GROUP BY U.UNIT_CD) A
+		ORDER BY A.UNIT_SEQ, A.UNIT_ID, A.COIN_BASIC, A.COIN_ID
+	</select>
+	
+	<!-- 환율 -->
+	<select id="selectExchangeRate" resultType="map">
+	/* selectExchangeRate */
+		SELECT
+			UNIT
+			, BASIC_RATE
+		FROM EXCHANGE_RATE
+		WHERE DTTM = (SELECT 
+			MAX(DTTM) DT 
+		FROM EXCHANGE_RATE)
+			AND UNIT IN ('USD', 'JPY', 'EUR', 'CNY')
+	</select>
+	
+	<!-- 보유 화폐 업데이트 -->
+	<update id="updateCoin">
+		/* updateCoin */
+		UPDATE STORE_COIN
+			SET COIN_CNT = #{coinCnt}
+		WHERE STORE_ID = #{storeId}
+			AND COIN_ID = #{coinId}
+	</update>
+	
+	<!-- 보유 화폐 업데이트 -->
+	<update id="updateSafeCoin">
+		/* updateSafeCoin */
+		UPDATE SAFE_BOX
+			SET COIN_CNT = #{safeCnt}
+		WHERE STORE_ID = #{storeId}
+			AND COIN_ID = #{coinId}
+	</update>
+	
+	<!-- 지점별 거래현황 상세 리스트 엑셀 -->
+	<select id="selectActiveListExcel" resultType="activeListVO">
+		/* selectActiveListExcel */
+		SELECT
+			A.*
+		FROM (
+			SELECT
+				DATE_FORMAT(MA.REG_DTTM, '%Y.%m.%d') REG_DTTM
+				, CASE WHEN MA.MEMBER_ID IS NULL THEN '비멤버십' ELSE '멤버십' END TYPE
+				, CASE WHEN MA.TP='B' THEN '구매' ELSE '판매' END TP
+				, MA.UNIT
+				, MA.GET_AMNT
+				, MA.BASIC_RATE
+				, MA.PAY_AMNT
+				, IFNULL(U.USR_NICK, MA.NONE_NM) USR_NICK
+				, MA.PAPER
+			FROM MEMBER_ACTIVE MA
+			LEFT OUTER JOIN MEMBER M ON MA.MEMBER_ID = M.MEMBER_ID
+			LEFT OUTER JOIN USER U ON M.USR_ID = U.USR_ID
+			WHERE MA.TP IN ('S', 'B')
+				AND MA.REG_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+			UNION ALL
+			SELECT
+				DATE_FORMAT(P.REG_DTTM, '%Y.%m.%d') REG_DTTM
+				, '포인트' TYPE
+				, '전환' TP
+				, P.UNIT
+				, P.GET_AMNT
+				, P.BASIC_RATE
+				, P.POINT PAY_AMNT
+				, U.USR_NICK
+				, P.PAPER
+			FROM POINT P, USER U
+			WHERE P.USR_ID = U.USR_ID
+				AND P.POINT_TP = 'C'
+				AND P.REG_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+			) A
+		ORDER BY A.REG_DTTM DESC
+	</select>
+	
+	<!-- 환전소 한화 금액 -->
+	<select id="selectStoreKor" resultType="int">
+		/* selectStoreKor */
+		SELECT
+			AMNT
+		FROM STORE_MONEY
+		WHERE STORE_ID = #{value}
+			AND TYPE = 'S'
+			AND UNIT_ID = 11
+	</select>
+	
+	<!-- 바코드 조회 -->
+	<select id="chkBarcode" resultType="map">
+		/* chkBarcode */
+		SELECT
+			CONCAT(LEFT(CAST(AES_DECRYPT(U.USR_NM_ID, SHA2(#{encKey},512)) AS CHAR), 8), '******') USR_NM_ID
+			, CAST(AES_DECRYPT(U.USR_NM, SHA2(#{encKey},512)) AS CHAR) USR_NM
+			, M.COST
+			, 'suc' flag
+		FROM USER U, MEMBER M
+		WHERE M.BARCODE = #{barcode}
+			AND M.USR_ID = U.USR_ID
+			AND U.USR_ST = 'Y'
+	</select>
+	
+	<!-- 판매 조회 -->
+	<select id="selectSellUnitInfo" resultType="map">
+		/* selectSellUnitInfo */
+		SELECT 
+			E.BASIC_RATE
+			, E.CASH_SELL
+			, U.UNIT_COMMIS
+		FROM EXCHANGE_RATE E, UNIT U
+		WHERE E.UNIT = #{unit}
+			<if test='dt != null'>
+			AND E.DTTM &lt; #{dt}
+			</if>
+			AND E.UNIT = U.UNIT_CD
+		ORDER BY E.DTTM DESC 
+		LIMIT 1
+	</select>
+	
+	<!-- 외화 등록 -->
+	<insert id="insertUnitNomem">
+		/* insertUnitNomem */
+		INSERT INTO MEMBER_ACTIVE(
+			STORE_ID
+			, ADMIN_ID
+			, UNIT
+			, GET_AMNT
+			, PAY_AMNT
+			, PAPER
+			, BASIC_RATE
+			, S_NM
+			, S_NM_ID
+			, TP
+			, REG_DTTM
+		) VALUES (
+			#{storeId}
+			, #{adminKey}
+			, #{unit}
+			, #{getAmnt}
+			, #{payAmnt}
+			, #{paper}
+			, #{basicRate}
+			, AES_ENCRYPT(#{usrNm}, SHA2(#{encKey},512))
+			, AES_ENCRYPT(#{usrNmId}, SHA2(#{encKey},512))
+			, #{tp}
+			, NOW()
+		)
+	</insert>
+	
+	<!-- 외화 구매 등록 -->
+	<insert id="insertSellUnitMem">
+		/* insertSellUnitMem */
+		INSERT INTO MEMBER_ACTIVE(
+			MEMBER_ID
+			, STORE_ID
+			, ADMIN_ID
+			, UNIT
+			, GET_AMNT
+			, PAY_AMNT
+			, PAPER
+			, BASIC_RATE
+			, TP
+			, REG_DTTM
+		)
+		SELECT
+			MEMBER_ID
+			, #{storeId}
+			, #{adminKey}
+			, #{unit}
+			, #{getAmnt}
+			, #{payAmnt}
+			, #{paper}
+			, #{basicRate}
+			, 'S'
+			, NOW()
+		FROM MEMBER
+		WHERE BARCODE = #{barcode}
+	</insert>
+	
+	<!-- 외화 구매 등록 -->
+	<insert id="insertStoreMoneyLog">
+		/* insertStoreMoneyLog */
+		INSERT INTO STORE_MONEY_LOG(
+			STORE_ID
+			, UNIT
+			, TYPE
+			, ST
+			, GET_AMNT
+			, PAY_AMNT
+			, BEF_AMNT
+			, AFT_AMNT
+			, REG_DTTM
+		)
+		SELECT
+			#{storeId}
+			, #{unit}
+			, #{type}
+			, #{st}
+			, #{getAmnt}
+			, #{payAmnt}
+			, S.AMNT
+			, CASE WHEN #{st} = 'S' THEN S.AMNT + #{getAmnt} ELSE S.AMNT - #{payAmnt} END
+			, NOW()
+		FROM STORE_MONEY S, UNIT U
+		WHERE S.STORE_ID = #{storeId}
+			AND S.TYPE = 'S'
+			AND S.UNIT_ID = U.UNIT_ID
+			AND U.UNIT_CD = #{unit}
+	</insert>
+	
+	<!-- 외화 구매 등록 -->
+	<insert id="insertStoreMoneyLogKor">
+		/* insertStoreMoneyLogKor */
+		INSERT INTO STORE_MONEY_LOG(
+			STORE_ID
+			, UNIT
+			, TYPE
+			, ST
+			, GET_AMNT
+			, PAY_AMNT
+			, BEF_AMNT
+			, AFT_AMNT
+			, REG_DTTM
+		)
+		SELECT
+			#{storeId}
+			, 'KOR'
+			, #{type}
+			, #{st}
+			, #{getAmnt}
+			, #{payAmnt}
+			, S.AMNT
+			, CASE WHEN #{st} = 'S' THEN S.AMNT - #{payAmnt} ELSE S.AMNT + #{getAmnt} END
+			, NOW()
+		FROM STORE_MONEY S, UNIT U
+		WHERE S.STORE_ID = #{storeId}
+			AND S.TYPE = 'S'
+			AND S.UNIT_ID = U.UNIT_ID
+			AND U.UNIT_CD = 'KOR'
+	</insert>
+	
+	<!-- 외화 구매 등록 -->
+	<update id="updateStoreMoneySellKor">
+		/* updateStoreMoneySellKor */
+		UPDATE STORE_MONEY
+			SET AMNT = AMNT - #{payAmnt}
+		WHERE STORE_ID = #{storeId}
+			AND UNIT_ID = 11
+			AND TYPE='S'
+	</update>
+	
+	<!-- 외화 구매 등록 -->
+	<update id="updateStoreMoneySell">
+		/* updateStoreMoneySell */
+		UPDATE STORE_MONEY SM, (SELECT UNIT_ID FROM UNIT WHERE UNIT_CD = #{unit}) U
+			SET SM.AMNT = AMNT + #{getAmnt}
+		WHERE SM.STORE_ID = #{storeId}
+			AND SM.UNIT_ID = U.UNIT_ID
+			AND TYPE = 'S'
+	</update>
+	
+	<!-- 판매 조회 -->
+	<select id="selectBuyUnitInfo" resultType="map">
+		/* selectBuyUnitInfo */
+		SELECT 
+			E.BASIC_RATE
+			, E.CASH_BUY
+			, U.UNIT_COMMIS
+		FROM EXCHANGE_RATE E, UNIT U
+		WHERE E.UNIT = #{unit}
+			<if test='dt != null'>
+			AND E.DTTM &lt; #{dt}
+			</if>
+			AND E.UNIT = U.UNIT_CD
+		ORDER BY E.DTTM DESC 
+		LIMIT 1
+	</select>
+	
+	<!-- 판매 조회 -->
+	<select id="selectStoreMoney" resultType="int">
+		/* selectBuyUnitInfo */
+		SELECT
+			SM.AMNT
+		FROM STORE_MONEY SM, UNIT U
+		WHERE SM.STORE_ID = #{storeId}
+			AND SM.TYPE = 'S'
+			AND SM.UNIT_ID = U.UNIT_ID
+			AND U.UNIT_CD = #{unit}
+	</select>
+	
+	<!-- 외화 구매 등록 -->
+	<insert id="insertBuyUnitMem">
+		/* insertBuyUnitMem */
+		INSERT INTO MEMBER_ACTIVE(
+			MEMBER_ID
+			, STORE_ID
+			, ADMIN_ID
+			, UNIT
+			, GET_AMNT
+			, PAY_AMNT
+			, PAPER
+			, BASIC_RATE
+			, ADD_COST
+			, TP
+			, REG_DTTM
+		) 
+		SELECT
+			MEMBER_ID
+			, #{storeId}
+			, #{adminKey}
+			, #{unit}
+			, #{bonus}
+			, #{payAmnt}
+			, #{paper}
+			, #{basicRateWeys}
+			, #{getAmnt}
+			, 'B'
+			, NOW()
+		FROM MEMBER
+		WHERE BARCODE = #{barcode}
+	</insert>
+	
+	<!-- 멤버십 포인트 차감 -->
+	<update id="updateMemberPointBuy">
+	/* updateMemberPointBuy */
+		UPDATE MEMBER
+			SET COST = COST - #{bonus} 
+		WHERE BARCODE = #{barcode}
+	</update>
+	
+	<!-- 사용 가능한 포인트 리스트 -->
+	<select id="selectUsrMemActList" resultType="map">
+	/* selectUsrMemActList */
+		SELECT 
+			MA.ACTIVE_ID
+			, MA.USE_COST 
+		FROM MEMBER M, MEMBER_ACTIVE MA
+		WHERE M.BARCODE = #{value}
+			AND M.MEMBER_ID = MA.MEMBER_ID
+			AND MA.TP IN ('N', 'C', 'E')
+			AND MA.DUE_DTTM &gt; NOW()
+			AND MA.USE_COST &gt; 0
+		ORDER BY MA.DUE_DTTM
+	</select>
+	
+	<!-- 멤버십 사용 -->
+	<update id="updateMemActUse">
+	/* updateMemActUse */
+		UPDATE MEMBER_ACTIVE
+			SET USE_COST = USE_COST - #{cost}
+		WHERE ACTIVE_ID = #{activeId}
+	</update>
+	
+	<!-- 외화 구매 등록 -->
+	<update id="updateStoreMoneyBuyKor">
+		/* updateStoreMoneyBuyKor */
+		UPDATE STORE_MONEY
+			SET AMNT = AMNT + #{getAmnt}
+		WHERE STORE_ID = #{storeId}
+			AND UNIT_ID = 11
+			AND TYPE='S'
+	</update>
+	
+	<!-- 외화 구매 등록 -->
+	<update id="updateStoreMoneyBuy">
+		/* updateStoreMoneyBuy */
+		UPDATE STORE_MONEY SM, (SELECT UNIT_ID FROM UNIT WHERE UNIT_CD = #{unit}) U
+			SET SM.AMNT = AMNT - #{payAmnt}
+		WHERE SM.STORE_ID = #{storeId}
+			AND SM.UNIT_ID = U.UNIT_ID
+			AND TYPE = 'S'
+	</update>
+	
+	<!-- 외화 정보 -->
+	<select id="selectStoreMoneyList" resultType="map">
+		/* selectStoreMoneyList */
+		SELECT
+			U.UNIT_NM
+			, U.UNIT_CD
+			, SM.UNIT_ID
+			, SM.AMNT
+			, SM.TYPE
+		FROM STORE_MONEY SM, UNIT U
+		WHERE SM.STORE_ID = #{value}
+			AND SM.UNIT_ID = U.UNIT_ID
+		ORDER BY SM.TYPE, U.UNIT_SEQ
+	</select>
+	
+	<!-- 외화 정보 -->
+	<update id="updateMoney">
+		/* updateMoney */
+		UPDATE STORE_MONEY
+			SET AMNT = #{amnt}
+		WHERE STORE_ID = #{storeId}
+			AND UNIT_ID = #{unitId}
+			AND TYPE = #{type}
+	</update>
+	
+	<!-- 외화 구매 등록 -->
+	<insert id="insertStoreMoneyLogForce">
+		/* insertStoreMoneyLogForce */
+		INSERT INTO STORE_MONEY_LOG(
+			STORE_ID
+			, UNIT
+			, TYPE
+			, ST
+			, GET_AMNT
+			, PAY_AMNT
+			, BEF_AMNT
+			, AFT_AMNT
+			, REG_DTTM
+		)
+		SELECT
+			#{storeId}
+			, U.UNIT_CD
+			, #{type}
+			, #{st}
+			, 0
+			, 0
+			, S.AMNT
+			, #{amnt}
+			, NOW()
+		FROM STORE_MONEY S, UNIT U
+		WHERE S.STORE_ID = #{storeId}
+			AND S.UNIT_ID = #{unitId}
+			AND S.TYPE = #{type}
+			AND S.UNIT_ID = U.UNIT_ID
+	</insert>
+	
+	<!-- 사용자 정보 업데이트 -->
+	<update id="updateUsrNmInfo">
+		/* updateUsrNmInfo */
+		UPDATE USER U, MEMBER M
+			SET U.USR_NM = AES_ENCRYPT(#{usrNm}, SHA2(#{encKey},512))
+				, U.USR_NM_ID = AES_ENCRYPT(#{usrNmId}, SHA2(#{encKey},512))
+		WHERE M.BARCODE = #{barcode}
+			AND M.USR_ID = U.USR_ID
+	</update>
+	
+	<!-- 로그 리스트 -->
+	<select id="selectLogList" resultType="logVO">
+		/* selectLogList */
+		SELECT
+			UNIT
+			, CASE WHEN TYPE='S' THEN '환전소' WHEN TYPE='I' THEN '인천' ELSE '예약' END TYPE
+			, CASE WHEN ST='S' THEN '판매' WHEN ST='B' THEN '구매' WHEN ST='R' THEN '예약' WHEN ST='C' THEN '취소' ELSE '수정' END ST
+			, GET_AMNT
+			, PAY_AMNT
+			, BEF_AMNT
+			, AFT_AMNT
+			, DATE_FORMAT(REG_DTTM, '%Y.%m.%d %H:%i:%s') REG_DTTM
+		FROM STORE_MONEY_LOG
+		WHERE STORE_ID = #{storeId}
+		ORDER BY REG_DTTM DESC
+		LIMIT #{pageSize} OFFSET #{searchPage}
+	</select>
+	
+	<!-- 로그 리스트 -->
+	<select id="selectLogListCnt" resultType="int">
+		/* selectLogListCnt */
+		SELECT
+			COUNT(STORE_ID)
+		FROM STORE_MONEY_LOG
+		WHERE STORE_ID = #{storeId}
+	</select>
+	
+	<!-- 예약통화 -->
+	<select id="selectRsvUnit" resultType="unitVO">
+		/* selectRsvUnit */
+		SELECT
+			U.UNIT_CD
+			, U.UNIT_NM
+		FROM UNIT U
+		WHERE U.UNIT_ST = 'Y'
+			AND U.RSV_ST IN ('R', 'Y')
+	</select>
+	
+</mapper>

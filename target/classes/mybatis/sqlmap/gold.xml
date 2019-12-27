@@ -1,0 +1,271 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.i4unetworks.weys.gold.GoldDao">
+
+	<!-- 시제 리스트 -->
+	<select id="selectGoldList" resultType="goldVO">
+		/* selectGoldList */
+		SELECT
+			G.UNIT
+			, G.PAPER
+			, G.AMNT
+			, G.ROW_SPAN
+			, (G.PAPER * G.AMNT) SUM_AMNT
+			, IFNULL(U.UNIT_DP, '₩') UNIT_DP
+			, S.S_AMNT
+		FROM GOLD_INFO G
+		LEFT OUTER JOIN UNIT U ON G.UNIT = U.UNIT_CD
+		INNER JOIN (
+			SELECT
+				UNIT
+				, SUM(PAPER * AMNT) S_AMNT
+			FROM GOLD_INFO
+			WHERE STORE_ID = #{storeId}
+			GROUP BY UNIT
+		) S ON G.UNIT = S.UNIT
+		WHERE G.STORE_ID = #{storeId}
+		ORDER BY CASE WHEN G.UNIT = 'KRW' THEN 30 ELSE U.UNIT_SEQ END, G.PAPER
+	</select>
+
+	<!-- 시제 리스트 -->
+	<select id="selectRsvInfo" resultType="map">
+		/* selectRsvInfo */
+		SELECT
+			R.UNIT
+			, SUM(R.RSV_AMNT) AMNT
+			, COUNT(R.RSV_ID) CNT
+			, SUM(CASE WHEN R.ADMIN_ST = 'N' THEN R.RSV_AMNT ELSE 0 END) N_READY
+			, SUM(CASE WHEN R.ADMIN_ST = 'Y' THEN R.RSV_AMNT ELSE 0 END) READY
+			, IFNULL(L.G_AMNT, 0) G_AMNT
+		FROM RSV R
+		LEFT OUTER JOIN (
+			SELECT
+				L.UNIT
+				, SUM(L.PAPER * (L.AMNT * -1)) G_AMNT
+			FROM GOLD_HIST G, GOLD_LOG L
+			WHERE G.RSV_DT = #{rsvDt}
+				AND G.GH_ID = L.GH_ID
+				AND L.AMNT &lt; 0
+				AND G.STORE_ID = #{storeId}
+			GROUP BY L.UNIT
+		) L ON R.UNIT = L.UNIT
+		WHERE ((R.RSV_DT = #{rsvDt} AND R.RSV_TM &gt; #{rsvTm}) OR (R.RSV_DT = #{endDt} AND R.RSV_TM &lt; #{rsvTm}))
+			AND R.RSV_ST IN ('R', 'F')
+		GROUP BY R.UNIT
+	</select>
+	
+	<!-- 시제 리스트 -->
+	<select id="selectGoldInfo" resultType="map">
+		/* selectGoldInfo */
+		SELECT
+			A.ADMIN_NAME
+			, G.GH_ID
+			, G.STORE_ID
+			, G.MEMO
+			, DATE_FORMAT(G.REG_DTTM, '%Y.%m.%d %H:%i') REG_DTTM
+		FROM GOLD_HIST G, ADMIN A
+		WHERE G.RSV_DT = #{rsvDt}
+			AND G.STORE_ID = #{storeId}
+			AND G.ADMIN_KEY = A.ADMIN_KEY
+		ORDER BY GH_ID DESC
+	</select>
+	
+	<!-- 히스토리 등록 -->
+	<insert id="insertGoldHist" useGeneratedKeys="true" keyProperty="ghId">
+		/* insertGoldHist */
+		INSERT INTO GOLD_HIST(
+			ADMIN_KEY
+			, STORE_ID
+			, RSV_DT
+			, MEMO
+			, REG_DTTM
+		) VALUES (
+			#{adminKey}
+			, #{storeId}
+			, #{rsvDt}
+			, #{memo}
+			, NOW()
+		)
+	</insert>
+	
+	<!-- 금고 수량 수량 변경 -->
+	<update id="updateGoldInfo">
+		/* updateGoldInfo */
+		UPDATE GOLD_INFO
+			SET AMNT = AMNT + (#{cnt} * #{move})
+		WHERE UNIT = #{unit}
+			AND PAPER = #{paper}
+			AND STORE_ID = #{storeId}
+	</update>
+
+	<!-- 히스토리 등록 -->
+	<insert id="insertGoldLog">
+		/* insertGoldLog */
+		INSERT INTO GOLD_LOG(
+			GH_ID
+			, UNIT
+			, PAPER
+			, AMNT
+		) VALUES (
+			#{ghId}
+			, #{unit}
+			, #{paper}
+			, (#{cnt} * #{move})
+		)
+	</insert>
+	
+	<!-- 변경 예약 정보 -->
+	<select id="selectRsvChange" resultType="map">
+		/* selectRsvChange */
+		SELECT
+			R.UNIT
+			, R.RSV_AMNT
+			, CONCAT(R.RSV_DT, ' ', R.RSV_TM) RSV_DT
+			, R.RSV_O_DT
+			, CASE WHEN U.FORIGN = 'Y' THEN CONCAT(CAST(AES_DECRYPT(U.GIV_NM, SHA2(#{encKey},512)) AS CHAR), ' ', CAST(AES_DECRYPT(U.SUR_NM, SHA2(#{encKey},512)) AS CHAR))
+						ELSE CAST(AES_DECRYPT(IFNULL(U.USR_NM, R.RSV_NM), SHA2(#{encKey},512)) AS CHAR) END RSV_NM
+			, CASE WHEN R.RSV_ST = 'R' AND R.ADMIN_ST = 'Y' THEN '인수완료' WHEN R.RSV_ST = 'R' AND R.ADMIN_ST = 'N' THEN '인수대기' ELSE '거래완료' END RSV_ST
+		FROM RSV R
+		LEFT OUTER JOIN USER U ON R.USR_ID = U.USR_ID
+		WHERE R.RSV_DT = #{rsvDt}
+			AND R.STORE_ID = #{storeId}
+			AND R.RSV_ST IN ('R', 'F')
+			AND R.RSV_DT != R.RSV_O_DT
+		ORDER BY R.RSV_TM
+	</select>
+	
+	<!-- 취소된 예약 정보 -->
+	<select id="selectRsvCancel" resultType="map">
+		/* selectRsvCancel */
+		SELECT
+			R.UNIT
+			, R.RSV_AMNT
+			, DATE_FORMAT(R.CANCEL_DTTM, '%Y.%m.%d %h:%i') CANCEL_DTTM
+			, CASE WHEN U.FORIGN = 'Y' THEN CONCAT(CAST(AES_DECRYPT(U.GIV_NM, SHA2(#{encKey},512)) AS CHAR), ' ', CAST(AES_DECRYPT(U.SUR_NM, SHA2(#{encKey},512)) AS CHAR))
+						ELSE CAST(AES_DECRYPT(IFNULL(U.USR_NM, R.RSV_NM), SHA2(#{encKey},512)) AS CHAR) END RSV_NM
+			, '인수 후 취소' RSV_ST
+		FROM RSV R
+		LEFT OUTER JOIN USER U ON R.USR_ID = U.USR_ID
+		WHERE R.RSV_DT = #{rsvDt}
+			AND R.STORE_ID = #{storeId}
+			AND R.RSV_ST IN ('CR', 'CF')
+			AND R.ADMIN_ST = 'Y'
+		ORDER BY R.CANCEL_DTTM
+	</select>
+	
+	<!-- 입력 예약 정보 -->
+	<select id="selectLogList" resultType="map">
+		/* selectLogList */
+		SELECT
+			GL.UNIT
+			, GL.PAPER
+			, GL.AMNT
+		FROM GOLD_LOG GL, GOLD_HIST GH
+		WHERE GL.GH_ID = #{GH_ID}
+			AND GL.GH_ID = GH.GH_ID
+			AND GH.STORE_ID = #{STORE_ID} 
+	</select>
+	
+	<!-- 담당자 지점 정보 -->
+	<select id="selectStoreList" resultType="storeListVO">
+		/* selectStoreList */
+		SELECT
+			S.STORE_NM
+			, S.STORE_ID
+		FROM ADMIN_STORE A, STORE S
+		WHERE A.ADMIN_KEY = #{value}
+			AND A.STORE_ID = S.STORE_ID
+	</select>
+	
+	<!-- 외화 정보 등록 -->
+	<insert id="insertMoneyMng">
+		/* insertMoneyMng */
+		INSERT INTO MONEY_MNG(
+			UNIT
+			, BUY_AMNT
+			, BUY_RATE
+			, BUY_KOR
+			, BUY_DTTM
+		) VALUES (
+			#{unit}
+			, #{buyAmnt}
+			, #{buyRate}
+			, #{buyKor}
+			, NOW()
+		)
+	</insert>
+	
+	<!-- 날짜 가져오기 -->
+	<select id="selectCashList" resultType="map">
+		/* selectCashList */
+		SELECT
+			L.UNIT
+			, L.A_CAGE
+			, L.B_CAGE
+			, CAST(CASE WHEN L.UNIT = 'JPY' THEN (L.A_CAGE + L.B_CAGE) * L.BASIC_RATE / 100 ELSE (L.A_CAGE + L.B_CAGE) * L.BASIC_RATE END AS INT) CAGE_KOR
+			, L.RSV_AMNT
+			, CAST(CASE WHEN L.UNIT = 'JPY' THEN L.RSV_AMNT * L.BASIC_RATE / 100 ELSE L.RSV_AMNT * L.BASIC_RATE END AS INT) RSV_KOR
+			, L.BASIC_RATE
+		FROM CASH_INFO I, CASH_LOG L
+		WHERE I.DT = #{startDt}
+			AND I.CASH_ID = L.CASH_ID
+	</select>
+	
+	<!-- 돈 가져오기 -->
+	<select id="selectMoneyList" resultType="map">
+	/* selectMoneyList */
+		SELECT
+			MM_ID
+			, (BUY_AMNT - SELL_AMNT) BUY_AMNT
+		FROM MONEY_MNG
+		WHERE UNIT = #{value}
+			AND BUY_AMNT != SELL_AMNT
+	</select>
+	
+	<!-- 예약 환율 정보 등록 -->
+	<update id="updateMoneyMng">
+	/* updateMoneyMng */
+		UPDATE MONEY_MNG
+			SET SELL_AMNT = SELL_AMNT + #{sellAmnt}
+				, SELL_KOR = SELL_KOR + #{sellKor}
+		WHERE MM_ID = #{MM_ID}
+	</update>
+	
+	<!-- 데이터 입력할 통화 정보 -->
+	<select id="selectDataInfo" resultType="map">
+	/* selectDataInfo */
+		SELECT
+			U.UNIT_SIZE
+			, DATE_FORMAT(IFNULL(MAX(D.REG_DTTM), DATE_ADD(NOW(), INTERVAL -1 DAY)), '%Y.%m.%d') dt
+		FROM UNIT U
+		LEFT OUTER JOIN DUM_DATA D ON U.UNIT_CD = D.UNIT
+		WHERE U.UNIT_CD = #{value}
+	</select>
+	
+	<!-- 데이터 입력할 통화 정보 -->
+	<select id="selectRateInfo" resultType="double">
+	/* selectRateInfo */
+		SELECT
+			BASIC_RATE
+		FROM EXCHANGE_RATE
+		WHERE UNIT = #{value}
+			AND DTTM = (SELECT
+				MAX(DTTM)
+			FROM EXCHANGE_RATE)
+	</select>
+	
+	<!-- 데이터 등록 -->
+	<insert id="insertDumData">
+		/* insertDumData */
+		INSERT INTO DUM_DATA(
+			UNIT
+			, AMNT
+			, BASIC_RATE
+			, REG_DTTM
+		) VALUES
+		<foreach collection="dataSet" item="item" separator=" , ">
+            (#{unit}, #{item}, #{basicRate}, #{dt})
+        </foreach>
+	</insert>
+	
+</mapper>

@@ -1,0 +1,502 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.i4unetworks.weys.store.StoreDao">
+
+	<!-- 지점 목록 리스트 -->
+	<select id="getStoreList" resultType="storeListVO">
+		/* getStoreList */
+		SELECT
+			S.STORE_ID
+			, S.STORE_NM
+			, S.STORE_NM_ENG
+			, S.TODAY_RSV
+			, S.DELIVER_TODAY
+			, D.RSV_DONE
+			, IFNULL(T.T_CNT, 0) RSV_TODAY
+			, IFNULL(G.T_CNT, 0) GET_TODAY
+			, IFNULL(N.T_CNT, 0) RSV_TOMORROW
+		FROM STORE S
+		LEFT OUTER JOIN (
+			SELECT
+				STORE_ID
+				, COUNT(RSV_ID) RSV_DONE
+			FROM RSV
+			WHERE RSV_ST = 'F'
+			GROUP BY STORE_ID
+		) D ON S.STORE_ID = D.STORE_ID
+		LEFT OUTER JOIN (
+			SELECT
+				STORE_ID
+				, COUNT(RSV_ID) T_CNT
+			FROM RSV
+			WHERE RSV_ST = 'R'
+				AND RSV_DT = #{startDt}
+			GROUP BY STORE_ID
+		) T ON S.STORE_ID = T.STORE_ID
+		LEFT OUTER JOIN (
+			SELECT
+				STORE_ID
+				, COUNT(RSV_ID) T_CNT
+			FROM RSV
+			WHERE RSV_ST = 'R'
+				AND REG_DTTM BETWEEN #{startDt} AND CONCAT(#{startDt}, ' 23:59:59')
+			GROUP BY STORE_ID
+		) G ON S.STORE_ID = G.STORE_ID
+		LEFT OUTER JOIN (
+			SELECT
+				STORE_ID
+				, COUNT(RSV_ID) T_CNT
+			FROM RSV
+			WHERE RSV_ST = 'R'
+				AND RSV_DT = #{endDt}
+			GROUP BY STORE_ID
+		) N ON S.STORE_ID = N.STORE_ID
+		LIMIT #{pageSize} OFFSET #{searchPage}
+	</select>
+
+	<!-- 지점 목록 리스트 전체수  -->
+	<select id="getStoreListCnt" resultType="int">
+		/* getStoreListCnt */
+		SELECT
+			COUNT(S.STORE_ID)
+		FROM STORE S
+	</select>
+	
+	<!-- 지점 목록 리스트 -->
+	<select id="selectStoreAllList" resultType="storeListVO">
+		/* selectStoreAllList */
+		SELECT
+			STORE_ID
+			, STORE_NM
+		FROM STORE
+		WHERE STORE_ST = 'Y'
+	</select>
+	
+	<!-- 지점 등록 -->
+	<insert id="insertStore" useGeneratedKeys="true" keyProperty="storeId">
+		/* insertStore */
+		INSERT INTO STORE(
+			STORE_NM
+			, STORE_NM_ENG
+			, DISPLAY_NM
+			, STORE_ADDR
+			, STORE_URL
+			, STORE_TEL
+			, STORE_OPENTIME
+			, STORE_IMG
+			, RSV_IMG
+			, STORE_ST
+			, STORE_RSV
+			, STORE_AIR
+			, RSV_COMMIS
+			, DELIVER_ST
+			, DELIVER_TIME
+			, DELIVER_CMS
+			, TODAY_RSV
+			, DELIVER_TODAY
+			, REG_DTTM
+		) VALUES (
+			#{storeNm}
+			, #{storeNmEng}
+			, #{displayNm}
+			, #{storeAddr}
+			, #{storeUrl}
+			, #{storeTel}
+			, #{storeOpentime}
+			, #{storeImg}
+			, #{rsvImg}
+			, #{storeSt}
+			, #{storeRsv}
+			, #{storeAir}
+			, #{rsvCommis}
+			, #{deliverSt}
+			, #{deliverTime}
+			, #{deliverCms}
+			, #{todayRsv}
+			, #{deliverToday}
+			, NOW()
+		)
+	</insert>
+	
+	<!-- 지점 상세 -->
+	<select id="selectDetail" resultType="storeDetailVO">
+		/* selectDetail */
+		SELECT
+			S.STORE_ID
+			, S.STORE_NM
+			, S.STORE_NM_ENG
+			, S.DISPLAY_NM
+			, S.STORE_ADDR
+			, S.STORE_URL
+			, S.STORE_TEL
+			, S.STORE_RSV
+			, S.STORE_OPENTIME
+			, S.STORE_IMG
+			, S.RSV_IMG
+			, S.STORE_ST
+			, S.STORE_AIR
+			, S.DELIVER_ST
+			, S.DELIVER_CMS
+			, S.DELIVER_TIME
+			, S.RSV_COMMIS
+			, S.TODAY_RSV
+			, S.DELIVER_TODAY
+			, GROUP_CONCAT(DATE_FORMAT(C.CLOSE_DT, '%Y.%m.%d')) CLOSE_DT
+		FROM STORE S
+		LEFT OUTER JOIN RSV_CLOSE C ON S.STORE_ID = C.STORE_ID
+		WHERE S.STORE_ID = #{value}
+	</select>
+	
+	<!-- 지점 수정 -->
+	<update id="updateStore">
+		/* updateStore */
+		UPDATE STORE
+			SET STORE_NM = #{storeNm}
+			, STORE_NM_ENG = #{storeNmEng}
+			, DISPLAY_NM = #{displayNm}
+			, STORE_ADDR = #{storeAddr}
+			, STORE_URL = #{storeUrl}
+			, STORE_TEL = #{storeTel}
+			, STORE_OPENTIME = #{storeOpentime}
+			, STORE_IMG = #{storeImg}
+			, RSV_IMG = #{rsvImg}
+			, STORE_ST = #{storeSt}
+			, STORE_RSV = #{storeRsv}
+			, STORE_AIR = #{storeAir}
+			, RSV_COMMIS = #{rsvCommis}
+			, DELIVER_ST = #{deliverSt}
+			, DELIVER_CMS = #{deliverCms}
+			, DELIVER_TIME = #{deliverTime}
+			, TODAY_RSV = #{todayRsv}
+			, DELIVER_TODAY = #{deliverToday}
+		WHERE STORE_ID = #{storeId}
+	</update>
+	
+	<!-- 지점 삭제 -->
+	<delete id="deleteStore">
+		/* deleteStore */
+		DELETE FROM STORE
+		WHERE STORE_ID = #{value}
+	</delete>
+	
+	<!-- 지점 상태 변경 -->
+	<update id="updateStatus">
+		/* updateStatus */
+		UPDATE STORE
+			SET STORE_ST = #{storeSt}
+		WHERE STORE_ID = #{storeId}
+	</update>
+
+	<!-- 지점 담당자 리스트 -->
+	<select id="selectStoreStaff" resultType="storeStaffVO">
+		/* selectStoreStaff */
+		SELECT
+			A.ADMIN_KEY
+			, A.ADMIN_ID
+			, A.ADMIN_NAME
+			, A.STORE_ID
+			, A.ADMIN_TP
+			, CASE WHEN A.ADMIN_ST='Y' THEN '사용중' ELSE '삭제' END ADMIN_ST
+			, CAST(AES_DECRYPT(A.ADMIN_TEL, SHA2(#{encKey},512)) AS CHAR) ADMIN_TEL
+			, S.STORE_NM
+		FROM ADMIN A
+		LEFT OUTER JOIN(
+			SELECT
+				GROUP_CONCAT(S.STORE_NM) STORE_NM
+				, A.ADMIN_KEY
+			FROM ADMIN_STORE A, STORE S
+			WHERE A.STORE_ID = S.STORE_ID
+			GROUP BY A.ADMIN_KEY) S ON A.ADMIN_KEY = S.ADMIN_KEY
+		ORDER BY CASE WHEN A.ADMIN_ST='Y' THEN 1 ELSE 2 END, A.ADMIN_KEY
+		LIMIT #{pageSize} OFFSET #{searchPage}
+	</select>
+	
+	<!-- 지점 담당자 리스트 수 -->
+	<select id="selectStoreStaffCnt" resultType="int">
+		/* selectStoreStaffCnt */
+		SELECT
+			COUNT(ADMIN_KEY)
+		FROM ADMIN
+	</select>
+	
+	<!-- 지점 리스트  -->
+	<select id="selectStoreList" resultType="map">
+		/* selectStoreList */
+		SELECT
+			STORE_ID storeId
+			, CONCAT(STORE_NM, '(', CASE WHEN STORE_ST='Y' THEN 'ON' ELSE 'OFF' END, ')') storeNm
+		FROM STORE
+	</select>
+	
+	<!-- 지점 담당자 등록 -->
+	<insert id="insertStaff" useGeneratedKeys="true" keyProperty="adminKey">
+		/* insertStaff */
+		INSERT INTO ADMIN(
+			ADMIN_ID
+			, ADMIN_NAME
+			, ADMIN_TEL
+			, ADMIN_TP
+			, REG_YMDT
+		) VALUES (
+			#{adminId}
+			, #{adminName}
+			, AES_ENCRYPT(#{adminTel}, SHA2(#{encKey},512))
+			, #{adminTp}
+			, NOW()
+		)
+	</insert>
+
+	<!-- 지점 담당자 비밀번호 설정 -->
+	<update id="updateStaffPw">
+		/* updateStaffPw */
+		UPDATE ADMIN
+		SET ADMIN_PW = #{adminPw}
+			, PWD_DUE = NOW()
+		WHERE ADMIN_KEY = #{adminKey}
+	</update>
+	
+	<!-- 지점 담당자 비밀번호 설정 -->
+	<insert id="insertPwdLog">
+		/* insertPwdLog */
+		INSERT INTO ADMIN_PWD_LOG(
+			ADMIN_KEY
+			, TARGET_KEY
+			, REG_DTTM
+		) VALUES (
+			#{adminKey}
+			, #{targetKey}
+			, NOW()
+		)
+	</insert>
+	
+	<!-- 지점 담당자 삭제 -->
+	<delete id="deleteStaffToken">
+		/* deleteStaffToken */
+		DELETE FROM ADMIN_TOKEN
+		WHERE ADMIN_KEY = #{value}
+	</delete>
+	
+	<!-- 지점 담당자 삭제 -->
+	<delete id="deleteStaffStore">
+		/* deleteStaffStore */
+		DELETE FROM ADMIN_STORE
+		WHERE ADMIN_KEY = #{value}
+	</delete>
+	
+	<!-- 지점 담당자 삭제 -->
+	<update id="deleteStaff">
+		/* deleteStaff */
+		UPDATE ADMIN
+			SET ADMIN_PW = ''
+				, ADMIN_TEL = NULL
+				, ADMIN_ST = 'N'
+		WHERE ADMIN_KEY = #{value}
+	</update>
+	
+	<!-- 지점 담당자 정보 수정 -->
+	<update id="updateStaffInfo">
+		/* updateStaffInfo */
+		UPDATE ADMIN
+		SET ADMIN_ID = #{adminId}
+			, ADMIN_TP = #{adminTp}
+			, ADMIN_NAME = #{adminName}
+			, ADMIN_TEL = AES_ENCRYPT(#{adminTel}, SHA2(#{encKey},512))
+			<if test='adminPw != null'>
+			, ADMIN_PW = #{adminPw}
+			, PWD_DUE = NOW()
+			</if>
+		WHERE ADMIN_KEY = #{adminKey}
+	</update>
+	
+	<!-- 지점 화폐 정보 -->
+	<select id="selectStoreCoin" resultType="map">
+		/* selectStoreCoin */
+		SELECT
+			U.UNIT_NM
+			, U.UNIT_CD
+			, C.COIN_NM
+			, SC.COIN_CNT
+			, (C.COIN_BASIC * SC.COIN_CNT) COIN_VAL
+		FROM STORE S, UNIT U, COIN C, STORE_COIN SC
+		WHERE S.STORE_ID = #{value}
+			AND S.STORE_ID = SC.STORE_ID
+			AND SC.COIN_ID = C.COIN_ID
+			AND C.UNIT_ID = U.UNIT_ID
+	</select>
+	
+	<!-- 지점 명 -->
+	<select id="selectStoreNm" resultType="string">
+		/* selectStoreNm */
+		SELECT
+			STORE_NM
+		FROM STORE
+		WHERE STORE_ID = #{value}
+	</select>
+	
+	<!-- 멤버십 거래내역 상세 리스트 -->
+	<select id="selectStoreMember" resultType="storeChangeVO">
+		/* selectStoreMember */
+		SELECT
+			DATE_FORMAT(MA.REG_DTTM, '%Y.%m.%d %H:%i') REG_DTTM
+			, CASE WHEN MA.TP = 'B' THEN '구매' ELSE '판매' END AS tp
+			, MA.UNIT unit
+			, MA.GET_AMNT
+			, MA.BASIC_RATE
+			, MA.PAY_AMNT
+			, U.USR_NICK
+			, A.ADMIN_NAME
+			, MA.PAPER paper
+		FROM MEMBER_ACTIVE MA, MEMBER M, USER U, ADMIN A
+		WHERE MA.STORE_ID = #{storeId}
+			AND MA.REG_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+			AND MA.MEMBER_ID = M.MEMBER_ID
+			AND M.USR_ID = U.USR_ID
+			AND MA.ADMIN_ID = A.ADMIN_KEY
+		<if test='isExcel == null'>
+		LIMIT #{pageSize} OFFSET #{searchPage}
+		</if>
+	</select>
+	
+	<!-- 멤버십 거래내역 상세 리스트 -->
+	<select id="selectStoreMemberCnt" resultType="int">
+		/* selectStoreMemberCnt */
+		SELECT
+			COUNT(MA.MEMBER_ID)
+		FROM MEMBER_ACTIVE MA, MEMBER M, USER U, ADMIN A
+		WHERE MA.STORE_ID = #{storeId}
+			AND MA.REG_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+			AND MA.MEMBER_ID = M.MEMBER_ID
+			AND M.USR_ID = U.USR_ID
+			AND MA.ADMIN_ID = A.ADMIN_KEY
+	</select>
+	
+	<!-- 포인트 거래내역 상세 리스트 -->
+	<select id="selectStorePoint" resultType="storeChangeVO">
+		/* selectStorePoint */
+		SELECT
+			DATE_FORMAT(P.REG_DTTM, '%Y.%m.%d %H:%i') REG_DTTM
+			, CASE WHEN P.POINT_TP = 'B' THEN '구매' ELSE '판매' END AS tp
+			, P.UNIT unit
+			, P.GET_AMNT
+			, P.BASIC_RATE
+			, P.POINT point
+			, U.USR_NICK
+			, A.ADMIN_NAME
+			, P.PAPER paper
+		FROM POINT P, USER U, ADMIN A
+		WHERE P.STORE_ID = #{storeId}
+			AND P.REG_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+			AND P.USR_ID = U.USR_ID
+			AND P.ADMIN_ID = A.ADMIN_KEY
+		<if test='isExcel == null'>
+		LIMIT #{pageSize} OFFSET #{searchPage}
+		</if>
+	</select>
+	
+	<!-- 포인트 거래내역 상세 리스트 -->
+	<select id="selectStorePointCnt" resultType="int">
+		/* selectStorePointCnt */
+		SELECT
+			COUNT(P.USR_ID)
+		FROM POINT P, USER U, ADMIN A
+		WHERE P.STORE_ID = #{storeId}
+			AND P.REG_DTTM BETWEEN #{startDt} AND CONCAT(#{endDt}, ' 23:59:59')
+			AND P.USR_ID = U.USR_ID
+			AND P.ADMIN_ID = A.ADMIN_KEY
+	</select>
+	
+	<!-- 요일별 오픈시간, 종료시간 -->
+	<insert id="insertRsvStore">
+		/* insertRsvStore */
+		INSERT INTO RSV_STORE(
+			STORE_ID
+			, DAY
+			, START_TM
+			, END_TM
+		) VALUES (
+			#{storeId}
+			, #{day}
+			, #{startTm}
+			, #{endTm}
+		)
+	</insert>
+	
+	<!-- 요일별 오픈시간, 종료시간 -->
+	<select id="selectOpenDay" resultType="map">
+		/* selectOpenDay */
+		SELECT
+			DAY
+			, START_TM
+			, END_TM
+			, OPEN_ST
+		FROM RSV_STORE
+		WHERE STORE_ID = #{value}
+	</select>
+	
+	<!-- 요일별 오픈시간, 종료시간 업데이트 -->
+	<update id="updateRsvStore">
+		/* updateRsvStore */
+		UPDATE RSV_STORE
+			SET START_TM = #{startTm}
+				, END_TM = #{endTm}
+				, OPEN_ST = #{openSt}
+		WHERE STORE_ID = #{storeId}
+			AND DAY = #{day}
+	</update>
+	
+	<!-- 휴일 테이블 정리 -->
+	<delete id="deleteRsvClose">
+		/* deleteRsvClose */
+		DELETE FROM RSV_CLOSE
+		WHERE STORE_ID = #{value}
+	</delete>
+	
+	<!-- 휴일 데이터 입력 -->
+	<insert id="insertRsvClose">
+		/* insertRsvClose */
+		INSERT INTO RSV_CLOSE(
+			STORE_ID
+			, CLOSE_DT
+			, REG_DTTM
+		) VALUES (
+			#{storeId}
+			, #{closeDt}
+			, NOW()
+		)
+	</insert>
+	
+	<!-- 지점 담당자 -->
+	<select id="selectAdminInfo" resultType="storeStaffVO">
+		/* selectAdminInfo */
+		SELECT
+			ADMIN_KEY
+			, ADMIN_ID
+			, ADMIN_NAME
+			, ADMIN_TP
+			, CAST(AES_DECRYPT(ADMIN_TEL, SHA2(#{encKey},512)) AS CHAR) ADMIN_TEL
+		FROM ADMIN
+		WHERE ADMIN_KEY = #{adminKey}
+	</select>
+	
+	<!-- 지점 담당자 -->
+	<select id="selectAdminStore" resultType="int">
+		/* selectAdminStore */
+		SELECT
+			STORE_ID
+		FROM ADMIN_STORE
+		WHERE ADMIN_KEY = #{value}
+	</select>
+	
+	<!-- 매니저 담당 지점 등록 -->
+	<insert id="insertAdminStore">
+		/* insertAdminStore */
+		INSERT INTO ADMIN_STORE(
+			ADMIN_KEY
+			, STORE_ID
+		) VALUES
+		<foreach collection="storeList" item="item" separator=" , ">
+            (#{adminKey}, #{item})
+        </foreach>
+	</insert>
+	
+</mapper>

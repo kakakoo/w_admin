@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.i4unetworks.weys.cop.CopDao">
+
+	<!-- 협업 기업 목록 리스트 -->
+	<select id="selectCopList" resultType="copVO">
+		/* selectCopList */
+		SELECT
+			COP_ID
+			, COP_NM
+			, COP_CD
+			, COP_ST
+			, DATE_FORMAT(REG_DTTM, '%Y.%m.%d %H:%i:%s') REG_DTTM
+		FROM COP
+		LIMIT #{pageSize} OFFSET #{searchPage}
+	</select>
+	
+	<!-- 협업 기업  전체 수  -->
+	<select id="selectCopListCnt" resultType="int">
+		/* selectCopListCnt */
+		SELECT
+			COUNT(COP_ID)
+		FROM COP
+	</select>
+	
+	<!-- 협업 기업 상세 -->
+	<select id="selectCopInfo" resultType="copVO">
+		/* selectCopInfo */
+		SELECT
+			COP_ID
+			, COP_NM
+			, COP_ADM
+			, COP_CD
+			, COP_LOGO
+			, COP_LOGO_B
+			, COP_BG
+		FROM COP
+		WHERE COP_ID = #{value}
+	</select>
+	
+	<!-- 협업 기업 등록 -->
+	<insert id="insertCop" useGeneratedKeys="true" keyProperty="copId">
+		/* insertCop */
+		INSERT INTO COP(
+			COP_NM
+			, COP_CD
+			, COP_ADM
+			, COP_ST
+			, COP_LOGO
+			, COP_LOGO_B
+			, COP_BG
+			, REG_DTTM
+		) VALUES (
+			#{copNm}
+			, #{copCd}
+			, #{copAdm}
+			, 'Y'
+			, #{copLogo}
+			, #{copLogoB}
+			, #{copBg}
+			, NOW()
+		)
+	</insert>
+	
+	<!-- 협업 기업 등록 -->
+	<update id="updateCopPw">
+		/* updateCopPw */
+		UPDATE COP
+			SET COP_PW = #{copPw}
+				, COP_PW_DUE = NOW()
+		WHERE COP_ID = #{copId}
+	</update>
+	
+	<!-- 협업 기업 수정 -->
+	<update id="updateCop">
+		/* updateCop */
+		UPDATE COP
+			SET COP_NM = #{copNm}
+				, COP_LOGO = #{copLogo}
+				, COP_LOGO_B = #{copLogoB}
+				, COP_BG = #{copBg}
+		WHERE COP_ID = #{copId}
+	</update>
+	
+	<!-- 협업 기업 수정 -->
+	<update id="deleteCop">
+		/* deleteCop */
+		UPDATE COP
+			SET COP_ST = 'N'
+		WHERE COP_ID = #{copId}
+	</update>
+	
+	<!-- 협업 기업 배너 목록 리스트 -->
+	<select id="selectCopBnrList" resultType="copBnrVO">
+		/* selectCopBnrList */
+		SELECT
+			CB_ID
+			, CB_NM
+			, CB_S_IMG
+			, CB_B_IMG
+			, CB_URL
+			, CB_ST
+			, DATE_FORMAT(REG_DTTM, '%Y.%m.%d') REG_DTTM
+		FROM COP_BANNER
+		ORDER BY CB_ID DESC
+		LIMIT #{pageSize} OFFSET #{searchPage}
+	</select>
+	
+	<!-- 협업 기업 배너 목록 리스트 -->
+	<select id="selectCopBnrListCnt" resultType="int">
+		/* selectCopBnrListCnt */
+		SELECT
+			COUNT(CB_ID)
+		FROM COP_BANNER
+	</select>
+	
+	<!-- 협업 기업 배너 -->
+	<select id="selectCopBnrInfo" resultType="copBnrVO">
+		/* selectCopBnrInfo */
+		SELECT
+			CB_ID
+			, CB_NM
+			, MODAL_NM
+			, BTN_NM
+			, CB_S_IMG
+			, CB_B_IMG
+			, CB_URL
+			, CB_ST
+			, DATE_FORMAT(REG_DTTM, '%Y.%m.%d %H:%i:%s') REG_DTTM
+		FROM COP_BANNER
+		WHERE CB_ID = #{value}
+	</select>
+	
+	<!-- 협업 기업 배너 등록 -->
+	<insert id="insertCopBnr">
+		/* insertCopBnr */
+		INSERT INTO COP_BANNER(
+			CB_NM
+			, MODAL_NM
+			, BTN_NM
+			, CB_S_IMG
+			, CB_B_IMG
+			, CB_URL
+			, CB_ST
+			, REG_DTTM
+		) VALUES (
+			#{cbNm}
+			, #{modalNm}
+			, #{btnNm}
+			, #{cbSImg}
+			, #{cbBImg}
+			, #{cbUrl}
+			, #{cbSt}
+			, NOW()
+		)
+	</insert>
+	
+	<!-- 협업 기업 배너 업데이트 -->
+	<update id="updateCopBnr">
+		/* updateCopBnr */
+		UPDATE COP_BANNER
+			SET CB_NM = #{cbNm}
+			, MODAL_NM = #{modalNm}
+			, BTN_NM = #{btnNm}
+			, CB_S_IMG = #{cbSImg}
+			, CB_B_IMG = #{cbBImg}
+			, CB_URL = #{cbUrl}
+			, CB_ST = #{cbSt}
+		WHERE CB_ID = #{cbId}
+	</update>
+	
+	<!-- 협업 기업 배너 삭제 -->
+	<delete id="deleteCopBnr">
+		/* deleteCopBnr */
+		DELETE FROM COP_BANNER
+		WHERE CB_ID = #{value}
+	</delete>
+	
+	<!-- 협업 코드 중복 체크 -->
+	<select id="checkCopCd" resultType="int">
+		/* checkCopCd */
+		SELECT
+			COUNT(COP_ID)
+		FROM COP
+		WHERE COP_CD = #{value}
+	</select>
+	
+</mapper>

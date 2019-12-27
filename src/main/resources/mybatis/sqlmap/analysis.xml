@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.i4unetworks.weys.analysis.AnalysisDao">
+
+	<!-- 통계 목록 -->
+	<select id="selectAnalysis" resultType="analysisVO">
+		/* selectAnalysis */
+		SELECT
+			(SELECT COUNT(*) 
+			FROM USER
+			WHERE USR_ST='Y'
+			<if test='startDt != null'>
+			AND USR_REG_DTTM BETWEEN #{startDt} AND #{endDt}
+			</if>
+			) totalUsr
+			, (SELECT COUNT(*)
+			FROM USER
+			WHERE USR_ST='Y' 
+			AND USR_FROM='A'
+			<if test='startDt != null'>
+			AND USR_REG_DTTM BETWEEN #{startDt} AND #{endDt}
+			</if>
+			) andUsr
+			, (SELECT COUNT(*)
+			FROM USER
+			WHERE USR_ST='Y' 
+			AND USR_FROM='I'
+			<if test='startDt != null'>
+			AND USR_REG_DTTM BETWEEN #{startDt} AND #{endDt}
+			</if>
+			) iosUsr
+			, (SELECT COUNT(*)
+			FROM USER
+			WHERE USR_ST='Y' 
+			AND USR_FROM='W'
+			<if test='startDt != null'>
+			AND USR_REG_DTTM BETWEEN #{startDt} AND #{endDt}
+			</if>
+			) webUsr
+			, (SELECT COUNT(*) 
+			FROM USER_LOG_CONN
+			WHERE 1=1
+			<if test='startDt != null'>
+			AND CONN_DTTM BETWEEN #{startDt} AND #{endDt}
+			</if>
+			) logCnt
+	</select>
+
+	<!-- 월별 가입자 차트 통계  -->
+	<select id="selectUsrChart" resultType="analysisVO">
+		/* selectUsrChart */
+		SELECT
+			COUNT(USR_ID) totalUsr
+			, SUM(CASE WHEN USR_FROM = 'A' THEN 1 ELSE 0 END) andUsr
+			, SUM(CASE WHEN USR_FROM = 'I' THEN 1 ELSE 0 END) iosUsr
+			, SUM(CASE WHEN USR_FROM = 'W' THEN 1 ELSE 0 END) webUsr
+			, CONCAT('"', DATE_FORMAT(USR_REG_DTTM, '%y.%m'), '"') dt
+		FROM USER
+		WHERE USR_ST='Y'
+			AND USR_REG_DTTM &gt; #{value}
+		GROUP BY dt
+	</select>
+	
+	<!-- 월별 접속 차트 통계  -->
+	<select id="selectLoginChart" resultType="map">
+		/* selectLoginChart */
+		SELECT 
+			CONCAT('"', DATE_FORMAT(CONN_DTTM, '%y.%m'), '"') DT
+			, COUNT(*) CNT
+		FROM USER_LOG_CONN 
+		WHERE CONN_DTTM &gt; #{value}
+		GROUP BY DT
+	</select>
+	
+	<!-- 예약 수수료 통계 -->
+	<select id="selectCmsList" resultType="map">
+		/* selectCmsList */
+		SELECT
+			SUM(A.CMS) CMS
+			, SUM(A.GET_AMNT) GET_AMNT
+			, SUM(A.WON_BILL) WON_BILL
+			, COUNT(RSV_ID) CNT
+			, A.dttm
+		FROM (
+		SELECT
+			RSV_ID
+			, CMS
+			, GET_AMNT
+			, CASE WHEN UNIT = 'JPY' THEN CAST(RSV_AMNT * BASIC_RATE_WEYS / 100 AS INT)
+				ELSE CAST(RSV_AMNT * BASIC_RATE_WEYS AS INT) END WON_BILL
+			, DATE_FORMAT(REG_DTTM, '%Y.%m') dttm
+		FROM RSV
+		WHERE RSV_ST IN ('R', 'F')) A
+		GROUP BY A.dttm
+		ORDER BY A.dttm DESC
+	</select>
+	
+	<!-- 예약 통화 -->
+	<select id="selectRsvUnit" resultType="map">
+		/* selectRsvUnit */
+		SELECT
+			UNIT_CD
+			, UNIT_NM
+		FROM UNIT
+		WHERE UNIT_ST = 'Y'
+			AND RSV_ST IN ('Y', 'R')
+		ORDER BY UNIT_SEQ
+	</select>
+	
+	<!-- 예약 지점 -->
+	<select id="selectRsvStore" resultType="map">
+		/* selectRsvStore */
+		SELECT
+			STORE_ID
+			, STORE_NM
+		FROM STORE
+		WHERE STORE_ST = 'Y'
+			AND (STORE_RSV = 'Y' OR DELIVER_ST = 'Y')
+		ORDER BY DISPLAY_SEQ
+	</select>
+	
+	<!-- 예약 수수료 통계 -->
+	<select id="selectAnalysisDetail" resultType="map">
+		/* selectAnalysisDetail */
+		SELECT
+			SUM(A.CMS) CMS
+			, SUM(A.GET_AMNT) GET_AMNT
+			, SUM(A.WON_BILL) WON_BILL
+			, COUNT(RSV_ID) CNT
+			, A.dttm
+		FROM (
+		SELECT
+			RSV_ID
+			, CMS
+			, GET_AMNT
+			, CASE WHEN UNIT = 'JPY' THEN CAST(RSV_AMNT * BASIC_RATE_WEYS / 100 AS INT)
+				ELSE CAST(RSV_AMNT * BASIC_RATE_WEYS AS INT) END WON_BILL
+			, DATE_FORMAT(REG_DTTM, #{trdTp}) dttm
+		FROM RSV
+		WHERE RSV_ST IN ('R', 'F')
+			<if test='storeId != "0"'>
+				AND STORE_ID = #{storeId}
+			</if>
+			<if test='trdUnit != "ALL"'>
+				AND UNIT = #{trdUnit}
+			</if>
+		) A
+		GROUP BY A.dttm
+		ORDER BY A.dttm DESC
+	</select>
+	
+	<!-- 예약 수수료 통계 -->
+	<select id="selectAnalysisDetailCnt" resultType="int">
+		/* selectAnalysisDetailCnt */
+		SELECT
+			COUNT(B.dttm)
+		FROM(
+			SELECT
+				A.dttm
+			FROM (
+				SELECT
+					RSV_ID
+					, CMS
+					, GET_AMNT
+					, CASE WHEN UNIT = 'JPY' THEN CAST(RSV_AMNT * BASIC_RATE_WEYS / 100 AS INT)
+						ELSE CAST(RSV_AMNT * BASIC_RATE_WEYS AS INT) END WON_BILL
+					, DATE_FORMAT(REG_DTTM, #{trdTp}) dttm
+				FROM RSV
+				WHERE RSV_ST IN ('R', 'F')
+					<if test='storeId != "0"'>
+						AND STORE_ID = #{storeId}
+					</if>
+					<if test='trdUnit != "ALL"'>
+						AND UNIT = #{trdUnit}
+					</if>
+				) A
+			GROUP BY A.dttm) B
+	</select>
+	
+</mapper>
